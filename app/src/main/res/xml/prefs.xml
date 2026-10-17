@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <Preference
+        android:key="status"
+        android:layout="@layout/preference_status_card"
+        android:selectable="false" />
+
+    <PreferenceCategory android:title="@string/group_ads">
+
+        <com.quietbox.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_ads"
+            android:key="p0_1_splash_ad_skip" />
+
+        <com.quietbox.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_ads"
+            android:key="p0_2_feed_ad_filter" />
+
+        <com.quietbox.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_ads"
+            android:key="p0_3_comment_ad_filter" />
+
+        <com.quietbox.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_ads"
+            android:key="p1_7_ext_app_block" />
+
+        <com.quietbox.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_ads"
+            android:key="p1_13_search_ad_filter" />
+
+        <com.quietbox.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_ads"
+            android:key="p1_14_note_detail_ad_banner" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/group_ui">
+
+        <com.quietbox.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_ui"
+            android:key="p0_4_update_dialog_block" />
+
+        <com.quietbox.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_ui"
+            android:key="p0_5_screenshot_detect_off" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/group_share">
+
+        <com.quietbox.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_share"
+            android:key="p1_9_copy_link_sanitize" />
+
+        <com.quietbox.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_share"
+            android:dependency="p1_9_copy_link_sanitize"
+            android:key="p1_9_strip_xsec_token" />
+
+        <com.quietbox.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_share"
+            android:key="p1_11_watermark_policy" />
+
+        <com.quietbox.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_share"
+            android:key="p1_12_autoplay_preference" />
+
+    </PreferenceCategory>
+
+    <Preference
+        android:key="footer_limits"
+        android:layout="@layout/preference_footer"
+        android:selectable="false" />
+
+    <Preference
+        android:key="footer_hint"
+        android:layout="@layout/preference_footer"
+        android:selectable="false" />
+
+</PreferenceScreen>

@@ -1,0 +1,100 @@
+plugins {
+    id 'com.android.application'
+}
+
+// 签名配置从 keystore.properties 读（该文件在 .gitignore 里，不入仓库）。
+// 没提供时回退 Android 默认 debug 签名：仓库开箱即可构建，任何人都能装上，
+// 只是不能算"正式签名"版本。等自己 keystore 稳定了再补这个文件。
+
+def keystorePropsFile = rootProject.file("keystore.properties")
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+
+android {
+    namespace 'com.quietbox.app'
+    // The installed package is "platforms;android-37.2" (dir android-37.2), which AGP
+    // cannot resolve from the bare compileSdk 37 name. Renaming the install dir to
+    // android-37 is what satisfies AGP; documented in README.
+    compileSdk 37
+
+    defaultConfig {
+        // 仓库新规：新模块包名必须是自有域名或 io.github.[用户名].[模块名]。
+        // 这里用后者（自动审批）。Java 包名保持 com.quietbox.app 不变。
+        applicationId "io.github.yigenhuobah.quietbox"
+        minSdk 29
+        targetSdk 36
+        versionCode 2
+        versionName "0.2.0"
+    }
+
+    signingConfigs {
+        if (keystoreProps.getProperty("storeFile")) {
+            release {
+                storeFile rootProject.file(keystoreProps.getProperty("storeFile"))
+                storePassword keystoreProps.getProperty("storePassword")
+                keyAlias keystoreProps.getProperty("keyAlias")
+                keyPassword keystoreProps.getProperty("keyPassword")
+            }
+        } else {
+            // 没有自备 keystore 时，release 显式借用 debug 证书。
+            // 必须显式指定：不指定的话 AGP 会产出一个没签名的 APK，
+            // 安装时报 INSTALL_PARSE_FAILED_NO_CERTIFICATES。
+            release {
+                initWith debug
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+        }
+        release {
+            // hook 集已稳定，开启 R8 收缩（Material 依赖会让 APK 涨到 10MB 级）。
+            // 入口类与回调的 keep 规则见 proguard-rules.pro。
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+        }
+    }
+
+    applicationVariants.all { variant ->
+        if (variant.buildType.name == "release") {
+            variant.outputs.all { output ->
+                output.outputFileName = "quietbox-${variant.versionName}.apk"
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        buildConfig false
+    }
+}
+
+dependencies {
+    // Provided by the framework inside the hooked process; must never be packaged.
+    compileOnly 'io.github.libxposed:api:102.0.0'
+    compileOnly 'io.github.libxposed:annotation:1.0.0'
+
+    // compileOnly 不拉传递依赖；@NonNull 来自下面的 appcompat/material 传递依赖，
+    // 不再单独声明 androidx.annotation，避免与它们的版本约束冲突。
+
+    // service must be PACKAGED, not compileOnly: the manifest declares
+    // io.github.libxposed.service.XposedProvider, and it is instantiated inside the
+    // module app's own process (compileOnly classes are absent at runtime).
+    // XposedProvider only forwards a binder and touches no hooked-process API.
+    implementation 'io.github.libxposed:service:102.0.0'
+
+    // UI 只在模块 App 进程用；hook 代码绝不引用这些类，所以不会影响宿主进程。
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'com.google.android.material:material:1.12.0'
+    implementation 'androidx.preference:preference:1.2.1'
+}

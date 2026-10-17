@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">静盒</string>
+    <string name="module_description">让小红书安静下来：去广告、收敛弹窗、收紧隐私。</string>
+
+    <!-- 界面外壳 -->
+    <string name="about">关于</string>
+    <string name="about_title">关于静盒</string>
+    <string name="about_body">版本 %1$s\n适配小红书 9.50.0 · libxposed API 102\n\n本模块与小红书官方无任何关联，仅供学习、研究和个人设备使用。使用可能违反目标应用的服务条款，风险由使用者自行承担。\n\nMIT License\ngithub.com/yigenhuobah/quietbox</string>
+    <string name="status_title">模块状态</string>
+    <string name="status_active">已激活</string>
+    <string name="status_inactive">未激活</string>
+    <string name="status_connecting">正在连接框架…</string>
+    <string name="status_detail_active">框架 API %1$d · 作用域已勾选</string>
+    <string name="status_detail_no_scope">框架已连接，但未勾选小红书作用域</string>
+    <string name="status_detail_inactive">请在 LSPosed 中启用本模块并勾选小红书</string>
+    <string name="status_detail_connecting">绑定成功后自动刷新</string>
+
+    <!-- 分组 -->
+    <string name="group_ads">广告</string>
+    <string name="group_ui">界面与隐私</string>
+    <string name="group_share">分享与播放</string>
+
+    <!-- 页脚 -->
+    <string name="footer_limits">已知限制：默认静音（小红书自带）、摇一摇拦截（检测在原生层）、埋点抑制（本版本无安全挂载点）在本版本不可用。</string>
+    <string name="footer_hint">修改后立即生效，无需重启小红书。若某项无效，请确认 LSPosed 作用域已勾选 com.xingin.xhs。</string>
+
+    <!-- 功能标题与说明 -->
+    <string name="f_p0_1_title">开屏广告跳过</string>
+    <string name="f_p0_1_summary">跳过开屏广告与冷启动占位画面</string>
+    <string name="f_p0_2_title">信息流广告过滤</string>
+    <string name="f_p0_2_summary">移除推荐流里的广告卡片</string>
+    <string name="f_p0_3_title">评论广告过滤</string>
+    <string name="f_p0_3_summary">隐藏评论区里的广告组件</string>
+    <string name="f_p0_4_title">更新弹窗屏蔽</string>
+    <string name="f_p0_4_summary">不再弹出版本更新提示</string>
+    <string name="f_p0_5_title">截图检测关闭</string>
+    <string name="f_p0_5_summary">不注册截图监听，手动分享不受影响</string>
+    <string name="f_p0_6_title">默认静音</string>
+    <string name="f_p0_6_summary">本版本不可用：小红书自带自动静音</string>
+    <string name="f_p1_7_title">广告外跳拦截</string>
+    <string name="f_p1_7_summary">广告落地页不拉起外部 App</string>
+    <string name="f_p1_8_title">摇一摇跳转禁用</string>
+    <string name="f_p1_8_summary">本版本不可用：检测在原生层</string>
+    <string name="f_p1_9_title">复制链接净化</string>
+    <string name="f_p1_9_summary">去掉链接里的追踪参数</string>
+    <string name="f_p1_10_title">埋点抑制</string>
+    <string name="f_p1_10_summary">本版本不可用：无安全的挂载点</string>
+    <string name="f_p1_11_title">水印策略</string>
+    <string name="f_p1_11_summary">保存图片时不带水印</string>
+    <string name="f_p1_12_title">自动播放与画质偏好</string>
+    <string name="f_p1_12_summary">关闭自动播放，默认最高画质</string>
+    <string name="f_p1_13_title">搜索广告过滤</string>
+    <string name="f_p1_13_summary">搜索结果里不显示广告</string>
+    <string name="f_p1_14_title">详情页广告条屏蔽</string>
+    <string name="f_p1_14_summary">隐藏笔记详情页底部的二跳广告条</string>
+
+    <!-- 复制链接子选项 -->
+    <string name="p1_9_strip_token_title">同时删除 xsec_token</string>
+    <string name="p1_9_strip_token_summary">该参数是访问令牌，删除后他人可能打不开链接</string>
+</resources>

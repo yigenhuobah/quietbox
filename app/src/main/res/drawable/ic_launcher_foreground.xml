@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 自适应图标前景：一个"盒子"加一道横线，呼应"静盒"（静音/收敛）。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M30,30h48v48h-48z" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M38,54h32"
+        android:strokeColor="#FF1F1F1F"
+        android:strokeWidth="8" />
+</vector>

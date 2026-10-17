@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:allowBackup="false"
+        android:description="@string/module_description"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:theme="@style/Theme.QuietBox">
+
+        <!--
+            开关页把配置写进框架的 remote preferences。此前只写模块自己的 MODE_PRIVATE，
+            小红书进程读不到，导致所有开关都不生效。
+            authority 必须是 <applicationId>.XposedService，这是 libxposed service 的约定；
+            官方 XposedProvider 是 final 且其回调入口是包内可见，所以直接用它，不包一层。
+        -->
+        <provider
+            android:name="io.github.libxposed.service.XposedProvider"
+            android:authorities="${applicationId}.XposedService"
+            android:exported="true"
+            android:grantUriPermissions="false" />
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+    </application>
+
+</manifest>

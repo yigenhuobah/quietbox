@@ -1,0 +1,27 @@
+# 本地机器相关配置（含本机 SDK 路径），绝不可入共通仓库
+local.properties
+
+# Gradle / 构建产物
+.gradle/
+build/
+app/build/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# 签名密钥与签名配置（keystore 一旦泄露模块可被冒名，必须本地保管）
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# 日志 / 崩溃
+*.log
+captures/
