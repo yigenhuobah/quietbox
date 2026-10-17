@@ -9,10 +9,12 @@
     <string name="about_body">版本 %1$s\n适配小红书 9.50.0 · libxposed API 102\n\n本模块与小红书官方无任何关联，仅供学习、研究和个人设备使用。使用可能违反目标应用的服务条款，风险由使用者自行承担。\n\nMIT License\ngithub.com/yigenhuobah/quietbox</string>
     <string name="status_title">模块状态</string>
     <string name="status_active">已激活</string>
+    <string name="status_connected">框架已连接</string>
     <string name="status_inactive">未激活</string>
     <string name="status_connecting">正在连接框架…</string>
-    <string name="status_detail_active">框架 API %1$d · 作用域已勾选</string>
-    <string name="status_detail_no_scope">框架已连接，但未勾选小红书作用域</string>
+    <string name="status_detail_active">框架 API %1$d · 已注入小红书</string>
+    <string name="status_detail_no_scope">框架已连接，但作用域未勾选小红书</string>
+    <string name="status_detail_not_running">启动小红书后生效。若已启动仍显示此状态，请检查模块是否已在 LSPosed 中启用</string>
     <string name="status_detail_inactive">请在 LSPosed 中启用本模块并勾选小红书</string>
     <string name="status_detail_connecting">绑定成功后自动刷新</string>
 

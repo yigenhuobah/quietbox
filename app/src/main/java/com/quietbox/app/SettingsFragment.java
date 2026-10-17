@@ -7,6 +7,7 @@ import androidx.preference.PreferenceFragmentCompat;
 
 import java.util.List;
 
+import io.github.libxposed.service.HookedTarget;
 import io.github.libxposed.service.XposedService;
 
 /**
@@ -89,7 +90,6 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                 status.setTitle(R.string.status_connecting);
                 status.setSummary(R.string.status_detail_connecting);
             } else {
-                status.setTitle(R.string.status_active);
                 int api = 0;
                 boolean scoped = false;
                 try {
@@ -101,9 +101,19 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                     scoped = scope != null && scope.contains(TARGET);
                 } catch (Throwable ignored) {
                 }
-                status.setSummary(scoped
-                        ? getString(R.string.status_detail_active, api)
-                        : getString(R.string.status_detail_no_scope));
+                // getRunningTargets 是 API 102 的"当前真的被注入的进程"，
+                // 只有它非空才能说明模块已启用——光看 service 绑定会误报"已激活"。
+                boolean injected = isTargetRunning(service);
+                if (!scoped) {
+                    status.setTitle(R.string.status_inactive);
+                    status.setSummary(R.string.status_detail_no_scope);
+                } else if (injected) {
+                    status.setTitle(R.string.status_active);
+                    status.setSummary(getString(R.string.status_detail_active, api));
+                } else {
+                    status.setTitle(R.string.status_connected);
+                    status.setSummary(R.string.status_detail_not_running);
+                }
             }
         }
 
@@ -127,5 +137,23 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                     Config.DEFAULT_STRIP_XSEC_TOKEN));
             sw.setEnabled(writable);
         }
+    }
+
+    /** 判断目标进程当前是否真的被注入（API 102 getRunningTargets）。 */
+    private boolean isTargetRunning(XposedService service) {
+        try {
+            List<HookedTarget> targets = service.getRunningTargets();
+            if (targets == null) {
+                return false;
+            }
+            for (HookedTarget t : targets) {
+                String name = t.getProcessName();
+                if (name != null && (name.equals(TARGET) || name.startsWith(TARGET + ":"))) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
     }
 }
