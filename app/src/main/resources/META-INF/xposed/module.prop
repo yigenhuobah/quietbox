@@ -2,4 +2,6 @@ minApiVersion=102
 targetApiVersion=102
 staticScope=true
 exceptionMode=protective
-autoHotReload=true
+# 模块没有实现 onHotReloading（默认实现返回 false，即拒绝热重载）。
+# 开着它只会在每次更新模块时弹「热重载失败」，因此关闭；更新后重启目标应用即可。
+autoHotReload=false
