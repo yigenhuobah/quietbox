@@ -54,14 +54,67 @@ bash tools/check-mounts.sh <新版apk>
 
 ## 发布流程
 
-1. 改 `app/build.gradle` 的 `versionCode` / `versionName`。
-2. `gradlew assembleDebug assembleRelease`，确认两者都通过。
-3. 真机安装 release 包，冷启动目标应用，确认：
-   - 挂载点注册数正常
-   - 没有 `skip` / `error`
-   - 目标进程没有崩溃
-4. 打 tag 并创建 GitHub Release，附上 `quietbox-<版本>.apk` 与 SHA-256。
-5. 更新 README 的兼容版本说明。
+模块同时发布到两个仓库，缺一个用户就收不到更新：
+
+| 仓库 | 作用 | tag 格式 |
+|---|---|---|
+| `yigenhuobah/quietbox` | 源码主仓库，Release 面向直接下载 | `v0.2.3` |
+| `Xposed-Modules-Repo/io.github.yigenhuobah.quietbox` | 官方模块仓库，LSPosed 管理器从这里读 | `5-0.2.3`（`<versionCode>-<versionName>`） |
+
+### 1. 构建
+
+```bash
+# 改 app/build.gradle 的 versionCode / versionName
+cd /d/quietbox
+./gradlew assembleDebug assembleRelease
+```
+
+两个构建都必须通过。release 包体积应在 2–3 MB（R8 开启），签名必须来自
+`keystore.properties`（无该文件会借用 debug 证书，**不要发布**）。
+
+### 2. 真机验证
+
+安装 release 包，冷启动目标应用，确认挂载点注册数正常、无 `skip` / `error`、
+目标进程不崩溃。新功能必须逐项触发一次，不能只看「注册成功」。
+
+### 3. 主仓库
+
+```bash
+git add -A && git commit -m "v0.2.3：<一句话>"
+git tag v0.2.3 && git push origin master --tags
+gh release create v0.2.3 build/outputs/apk/release/quietbox-0.2.3.apk \
+  --title "0.2.3" --notes "<更新说明>"
+```
+
+### 4. 官方模块仓库
+
+官方仓库由机器人创建，本地克隆一份长期保留：
+
+```bash
+cd /e/tmp-xhs-mod/official-repo
+# 换入新 APK；SUMMARY 和 README.md 同步主仓库的用户说明
+cp /d/quietbox/app/build/outputs/apk/release/quietbox-0.2.3.apk .
+git add -A && git commit -m "0.2.3"
+git tag 5-0.2.3 && git push origin main --tags
+gh release create 5-0.2.3 quietbox-0.2.3.apk --title "0.2.3" --notes "<更新说明>"
+```
+
+注意事项：
+
+- **tag 必须是 `<versionCode>-<versionName>`**，解析失败模块不会出现在索引里。
+- 官方仓库里只需要 `SUMMARY`、`README.md` 和 release 资产，不要推源码。
+- 仓库 **Description** 是模块在 LSPosed 里显示的名字，只能用网页设置
+  （About 齿轮 → Description）。GitHub API 对 `maintain` 角色返回 404。
+- 发布后 5–60 分钟官方索引（`modules.lsposed.org/modules.json`）重建，可自查：
+
+```bash
+curl -s https://modules.lsposed.org/modules.json \
+  | grep -o 'io.github.yigenhuobah.quietbox'
+```
+
+### 5. 收尾
+
+更新 README 的兼容版本说明与 CHANGELOG。
 
 ## 签名
 
