@@ -40,7 +40,9 @@ public enum Feature {
     SEARCH_AD_FILTER("P1-13", R.string.f_p1_13_title, R.string.f_p1_13_summary,
             "p1_13_search_ad_filter", false, null),
     NOTE_DETAIL_AD_BANNER("P1-14", R.string.f_p1_14_title, R.string.f_p1_14_summary,
-            "p1_14_note_detail_ad_banner", false, null);
+            "p1_14_note_detail_ad_banner", false, null),
+    NOTE_UNAVAILABLE_VIEW("P1-15", R.string.f_p1_15_title, R.string.f_p1_15_summary,
+            "p1_15_note_unavailable_view", false, null);
 
     public final String id;
     public final int titleRes;

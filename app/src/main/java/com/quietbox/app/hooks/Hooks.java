@@ -81,6 +81,9 @@ public final class Hooks {
                 case NOTE_DETAIL_AD_BANNER:
                     NoteDetailAdHooks.install(module, cl);
                     break;
+                case NOTE_UNAVAILABLE_VIEW:
+                    NoteUnavailableHooks.install(module, cl);
+                    break;
                 default:
                     break;
             }

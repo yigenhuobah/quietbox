@@ -20,6 +20,7 @@
 
     <!-- 分组 -->
     <string name="group_ads">广告</string>
+    <string name="group_content">内容与浏览</string>
     <string name="group_ui">界面与隐私</string>
     <string name="group_share">分享与播放</string>
 
@@ -56,6 +57,8 @@
     <string name="f_p1_13_summary">搜索结果里不显示广告</string>
     <string name="f_p1_14_title">详情页广告条屏蔽</string>
     <string name="f_p1_14_summary">隐藏笔记详情页底部的二跳广告条</string>
+    <string name="f_p1_15_title">已删除笔记查看</string>
+    <string name="f_p1_15_summary">笔记被删除后仍用本地已缓存的内容展示</string>
 
     <!-- 复制链接子选项 -->
     <string name="p1_9_strip_token_title">同时删除 xsec_token</string>

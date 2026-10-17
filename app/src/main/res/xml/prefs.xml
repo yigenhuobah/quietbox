@@ -34,6 +34,14 @@
 
     </PreferenceCategory>
 
+    <PreferenceCategory android:title="@string/group_content">
+
+        <com.quietbox.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_content"
+            android:key="p1_15_note_unavailable_view" />
+
+    </PreferenceCategory>
+
     <PreferenceCategory android:title="@string/group_ui">
 
         <com.quietbox.app.MaterialSwitchPreference
