@@ -77,11 +77,19 @@ cd /d/quietbox
 安装 release 包，冷启动目标应用，确认挂载点注册数正常、无 `skip` / `error`、
 目标进程不崩溃。新功能必须逐项触发一次，不能只看「注册成功」。
 
+0.4.0 起 AB 面板还需额外验证：
+
+1. 模块 App 打开「测试」页 → 启用面板总开关；
+2. 冷启动小红书，logcat 应出现 `P2-1 registered ABStore#f/b` 与 `ConfigCenter#l`；
+3. 强开一项确实会被读取的实验，回到小红书，应出现
+   `P2-1 provider pull ...` 与 `P2-1 override <key>=<value>`；
+4. 回到模块 App 的「测试」页，最底部「其他」应已有探测到的 key。
+
 ### 3. 主仓库
 
 ```bash
 git add -A && git commit -m "v0.2.3：<一句话>"
-git tag v0.2.3 && git push origin master --tags
+git tag v0.2.3 && git push origin main --tags
 gh release create v0.2.3 build/outputs/apk/release/quietbox-0.2.3.apk \
   --title "0.2.3" --notes "<更新说明>"
 ```
