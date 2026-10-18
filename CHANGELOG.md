@@ -1,5 +1,16 @@
 # 更新日志
 
+## v0.5.0 — 2026-10-19
+
+- 精选实验从 19 项扩到 21 项：
+  - 新增「P3 图片预加载」（`andr_note_detail_preload_p3_image_request`）
+  - 新增「解除 2K/4K 码流过滤」（`andr_player_intelligent_rep_select_disable_filter_2k_4k`）
+- 「测试」页新增「导出全量实验」：生成 CSV（全量 5760 个 key + 当前探测值），
+  通过系统文件选择器保存到本地，不需要存储权限。
+- 修正「字幕新样式」的 AB key（`caption_new_style_v3`）。
+- 构建：`quietbox-0.5.0.apk`，2,555,756 字节，SHA-256
+  `f418b3e025bae58d9910c2ff2146b7d7b311d0e43ec14175d1fdd2a8450647fd`。
+
 ## v0.4.1 — 2026-10-18
 
 - 修正「字幕新样式」的 AB key：实际读取的是 `caption_new_style_v3`，

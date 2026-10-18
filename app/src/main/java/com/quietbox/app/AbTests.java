@@ -43,6 +43,9 @@ public final class AbTests {
             new AbTest("andr_profile_layout_request_preload",
                     AbTest.GROUP_DETAIL, R.string.ab_profile_preload,
                     R.string.ab_profile_preload_desc, "1"),
+            new AbTest("andr_note_detail_preload_p3_image_request",
+                    AbTest.GROUP_DETAIL, R.string.ab_p3_preload,
+                    R.string.ab_p3_preload_desc, "true"),
 
             // 播放体验
             new AbTest("andr_video_progress_bar_hide_opt_enable",
@@ -66,6 +69,9 @@ public final class AbTests {
             new AbTest("caption_new_style_v3",
                     AbTest.GROUP_PLAYBACK, R.string.ab_caption_new_style,
                     R.string.ab_caption_new_style_desc, "1"),
+            new AbTest("andr_player_intelligent_rep_select_disable_filter_2k_4k",
+                    AbTest.GROUP_PLAYBACK, R.string.ab_2k4k_filter,
+                    R.string.ab_2k4k_filter_desc, "1"),
 
             // 其他推荐
             new AbTest("andr_cmt_optimization_keyboard",
@@ -93,6 +99,18 @@ public final class AbTests {
 
     public static boolean isCurated(String key) {
         return key != null && CURATED.contains(key);
+    }
+
+    public static AbTest byKey(String key) {
+        if (key == null) {
+            return null;
+        }
+        for (AbTest t : ALL) {
+            if (t.key.equals(key)) {
+                return t;
+            }
+        }
+        return null;
     }
 
     public static int groupTitle(int group) {

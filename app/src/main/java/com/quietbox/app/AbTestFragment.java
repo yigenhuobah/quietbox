@@ -1,10 +1,16 @@
 package com.quietbox.app;
 
 import android.content.Context;
+import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.format.DateFormat;
 import android.view.View;
+import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceCategory;
 import androidx.preference.PreferenceFragmentCompat;
@@ -12,24 +18,36 @@ import androidx.preference.PreferenceGroup;
 import androidx.preference.PreferenceScreen;
 import androidx.recyclerview.widget.RecyclerView;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 「测试」页。
  *
- * 顶部是面板总开关，下面是精选的高价值实验，最底部是模块探测到但未收录的 key。
- * 未收录项只读——它们可能是广告/埋点/服务端调参，强改容易出问题。
- *
- * 「其他」按 50 条一批增量加载：滚到底自动加载下一批，底部同时保留可点的
- * 「加载更多」兜底（列表不够长、滚不动时用）。
+ * 顶部是面板总开关和「导出全量实验」，下面是精选的高价值实验，
+ * 最底部是模块探测到但未收录的 key（50 条一批，滚到底自动加载）。
  */
 public class AbTestFragment extends PreferenceFragmentCompat {
 
     private static final int OTHER_BATCH = 50;
+    private static final String CATALOG = "ab_catalog.tsv";
+
+    private final ActivityResultLauncher<String> mCreateDoc =
+            registerForActivityResult(new ActivityResultContracts.CreateDocument("text/csv"),
+                    this::onExportUri);
 
     private ConfigStore mStore;
     private AbConfigStore mAb;
@@ -107,6 +125,16 @@ public class AbTestFragment extends PreferenceFragmentCompat {
         });
         screen.addPreference(mMaster);
 
+        Preference export = new Preference(ctx);
+        export.setIcon(R.drawable.ic_test);
+        export.setTitle(R.string.ab_export_title);
+        export.setSummary(R.string.ab_export_summary);
+        export.setOnPreferenceClickListener(pref -> {
+            mCreateDoc.launch(exportName());
+            return true;
+        });
+        screen.addPreference(export);
+
         int lastGroup = -1;
         PreferenceCategory category = null;
         for (AbTest test : AbTests.ALL) {
@@ -154,7 +182,7 @@ public class AbTestFragment extends PreferenceFragmentCompat {
             if (!(p instanceof MaterialSwitchPreference) || p == mMaster) {
                 continue;
             }
-            AbTest test = findByKey(p.getKey());
+            AbTest test = AbTests.byKey(p.getKey());
             if (test == null) {
                 continue;
             }
@@ -271,15 +299,113 @@ public class AbTestFragment extends PreferenceFragmentCompat {
         return getString(R.string.ab_other_unknown);
     }
 
-    private static AbTest findByKey(String key) {
-        if (key == null) {
-            return null;
+    // ---------- 全量导出 ----------
+
+    private static String exportName() {
+        return "quietbox-abtest-"
+                + new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date())
+                + ".csv";
+    }
+
+    private void onExportUri(Uri uri) {
+        if (uri == null) {
+            return;
         }
-        for (AbTest t : AbTests.ALL) {
-            if (t.key.equals(key)) {
-                return t;
+        Context app = requireContext().getApplicationContext();
+        new Thread(() -> {
+            try {
+                String csv = buildCsv(app);
+                int rows = countRows(csv);
+                try (OutputStream os = app.getContentResolver().openOutputStream(uri)) {
+                    if (os == null) {
+                        throw new IOException("openOutputStream returned null");
+                    }
+                    // UTF-8 BOM：Excel 直接打开不乱码。
+                    os.write(0xEF);
+                    os.write(0xBB);
+                    os.write(0xBF);
+                    os.write(csv.getBytes(StandardCharsets.UTF_8));
+                }
+                toast(app, app.getString(R.string.ab_export_done, rows));
+            } catch (Throwable t) {
+                String msg = t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage();
+                toast(app, app.getString(R.string.ab_export_failed, msg));
+            }
+        }, "QuietBox-Export").start();
+    }
+
+    /** 全量目录（assets/ab_catalog.tsv） + 本次探测值，合成与 PC 导出同口径的 CSV。 */
+    private String buildCsv(Context app) throws IOException {
+        Map<String, String> report = new AbConfigStore(app).report();
+        StringBuilder sb = new StringBuilder(1 << 20);
+        sb.append("key,current_value,status,primary_category,recommendation,")
+                .append("curated,force_value,curated_title\n");
+
+        Set<String> seen = new LinkedHashSet<>();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(
+                app.getAssets().open(CATALOG), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.isEmpty()) {
+                    continue;
+                }
+                String[] parts = line.split("\t");
+                if (parts.length < 3 || !seen.add(parts[0])) {
+                    continue;
+                }
+                appendRow(sb, app, parts[0], parts[1], parts[2], report);
             }
         }
-        return null;
+
+        // 运行中探测到、但不在 9.50.0 目录里的 key（服务端新增等）。
+        for (String key : report.keySet()) {
+            if (seen.add(key)) {
+                appendRow(sb, app, key, "其他", "未收录", report);
+            }
+        }
+        return sb.toString();
+    }
+
+    private void appendRow(StringBuilder sb, Context app, String key, String category,
+                           String recommendation, Map<String, String> report) {
+        AbTest curated = AbTests.byKey(key);
+        String value = report.get(key);
+        String status = value != null ? "已读取" : "未读取";
+        String rec = curated != null ? "精选（已收录）" : recommendation;
+        String force = curated != null ? curated.forceValue : "";
+        String title = curated != null ? app.getString(curated.titleRes) : "";
+        sb.append(esc(key)).append(',')
+                .append(esc(value == null ? "" : value)).append(',')
+                .append(status).append(',')
+                .append(esc(category)).append(',')
+                .append(esc(rec)).append(',')
+                .append(curated != null ? "是" : "否").append(',')
+                .append(esc(force)).append(',')
+                .append(esc(title)).append('\n');
+    }
+
+    private static String esc(String value) {
+        if (value == null) {
+            return "";
+        }
+        boolean quote = value.indexOf(',') >= 0 || value.indexOf('"') >= 0
+                || value.indexOf('\n') >= 0 || value.indexOf('\r') >= 0;
+        String escaped = value.replace("\"", "\"\"");
+        return quote ? "\"" + escaped + "\"" : escaped;
+    }
+
+    private static int countRows(String csv) {
+        int lines = 0;
+        for (int i = 0; i < csv.length(); i++) {
+            if (csv.charAt(i) == '\n') {
+                lines++;
+            }
+        }
+        return Math.max(0, lines - 1);
+    }
+
+    private static void toast(Context context, String message) {
+        new Handler(Looper.getMainLooper()).post(
+                () -> Toast.makeText(context, message, Toast.LENGTH_LONG).show());
     }
 }

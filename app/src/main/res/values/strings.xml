@@ -28,6 +28,10 @@
     <string name="ab_panel_title">启用 AB 测试面板</string>
     <string name="ab_panel_summary">强开灰度实验。首次启用后需重启小红书；之后改单个开关，回到小红书约 3 秒生效。</string>
     <string name="ab_need_framework">框架未连接，无法写入配置。请确认 LSPosed 已启用本模块。</string>
+    <string name="ab_export_title">导出全量实验</string>
+    <string name="ab_export_summary">生成 CSV：全量 key + 当前探测值</string>
+    <string name="ab_export_done">已导出 %1$d 条</string>
+    <string name="ab_export_failed">导出失败：%1$s</string>
     <string name="ab_warning_title">使用前必读</string>
     <string name="ab_warning">强开的是灰度实验组，不是隐藏福利。部分实验依赖服务端配套数据，强开可能出现页面空白、字段缺失或崩溃。请一次只开一项，确认无异常再继续；出问题关闭对应开关并重启小红书。广告、埋点、直播、服务端调参类实验不在此页提供。</string>
 
@@ -51,6 +55,8 @@
     <string name="ab_detail_layout_preload_desc">提前构建详情页布局（组号 1）。</string>
     <string name="ab_profile_preload">个人页布局预取</string>
     <string name="ab_profile_preload_desc">进入个人页前预取布局。</string>
+    <string name="ab_p3_preload">P3 图片预加载</string>
+    <string name="ab_p3_preload_desc">详情页 P3 色域图片提前请求，打开图片笔记更快。</string>
 
     <string name="ab_video_progress_hide">进度条自动隐藏</string>
     <string name="ab_video_progress_hide_desc">播放时进度条更快淡出。</string>
@@ -66,6 +72,8 @@
     <string name="ab_video_light_ui_desc">播放界面使用更简洁的控件。</string>
     <string name="ab_caption_new_style">字幕新样式</string>
     <string name="ab_caption_new_style_desc">启用新版字幕样式。</string>
+    <string name="ab_2k4k_filter">解除 2K/4K 码流过滤</string>
+    <string name="ab_2k4k_filter_desc">允许播放器选择 2K/4K 清晰度；高分辨率屏幕、网络好时再开。</string>
 
     <string name="ab_cmt_keyboard">评论键盘优化</string>
     <string name="ab_cmt_keyboard_desc">评论输入框与键盘联动更顺畅。</string>
