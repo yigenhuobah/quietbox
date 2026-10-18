@@ -63,7 +63,7 @@ public final class AbTests {
             new AbTest("andr_video_light_ui_opt",
                     AbTest.GROUP_PLAYBACK, R.string.ab_video_light_ui,
                     R.string.ab_video_light_ui_desc, "1"),
-            new AbTest("andr_caption_new_style_v3",
+            new AbTest("caption_new_style_v3",
                     AbTest.GROUP_PLAYBACK, R.string.ab_caption_new_style,
                     R.string.ab_caption_new_style_desc, "1"),
 
