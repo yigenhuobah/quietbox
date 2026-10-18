@@ -105,6 +105,10 @@ gh release create 5-0.2.3 quietbox-0.2.3.apk --title "0.2.3" --notes "<更新说
 - 官方仓库里只需要 `SUMMARY`、`README.md` 和 release 资产，不要推源码。
 - 仓库 **Description** 是模块在 LSPosed 里显示的名字，只能用网页设置
   （About 齿轮 → Description）。GitHub API 对 `maintain` 角色返回 404。
+- 模块作者在该仓库只有 **maintain** 权限，**无法添加协作者**（需要 admin）。
+  发版只用 `maintain` 就够；想让另一个号发版，只能通过 submission issue 让机器人
+  追加维护者，不要指望网页的 Collaborators 入口。
+- 官方索引站点会挡爬虫，`curl` 可能直接返回 403。这不是模块没上架，等索引重建即可。
 - 发布后 5–60 分钟官方索引（`modules.lsposed.org/modules.json`）重建，可自查：
 
 ```bash
