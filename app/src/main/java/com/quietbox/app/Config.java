@@ -4,6 +4,7 @@ import android.content.SharedPreferences;
 import android.util.Log;
 
 import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import io.github.libxposed.api.XposedInterface;
@@ -22,9 +23,13 @@ public final class Config {
     public static final String KEY_STRIP_XSEC_TOKEN = "p1_9_strip_xsec_token";
     public static final boolean DEFAULT_STRIP_XSEC_TOKEN = false;
 
+    /** AB 覆盖表：每行 key=value，由「测试」页写入，目标进程每 3 秒重读。 */
+    public static final String KEY_AB_OVERRIDES = "ab_overrides";
+
     private static final String TAG = "QuietBox";
 
     private final Map<Feature, Boolean> mEnabled = new EnumMap<>(Feature.class);
+    private final Map<String, String> mAbOverrides = new LinkedHashMap<>();
     private boolean mStripXsecToken = DEFAULT_STRIP_XSEC_TOKEN;
 
     private Config() {
@@ -46,6 +51,7 @@ public final class Config {
                 config.mEnabled.put(f, sp.getBoolean(f.key, f.defaultEnabled));
             }
             config.mStripXsecToken = sp.getBoolean(KEY_STRIP_XSEC_TOKEN, DEFAULT_STRIP_XSEC_TOKEN);
+            parseOverrides(sp.getString(KEY_AB_OVERRIDES, ""), config.mAbOverrides);
         } catch (Throwable t) {
             module.log(Log.WARN, TAG, "remote prefs unavailable: use built-in defaults", t);
         }
@@ -67,5 +73,30 @@ public final class Config {
 
     public boolean stripXsecToken() {
         return mStripXsecToken;
+    }
+
+    public Map<String, String> abOverrides() {
+        return mAbOverrides;
+    }
+
+    public String abOverride(String key) {
+        return mAbOverrides.get(key);
+    }
+
+    private static void parseOverrides(String raw, Map<String, String> out) {
+        if (raw == null) {
+            return;
+        }
+        for (String line : raw.split("\n")) {
+            int eq = line.indexOf('=');
+            if (eq <= 0) {
+                continue;
+            }
+            String key = line.substring(0, eq).trim();
+            String value = line.substring(eq + 1).trim();
+            if (!key.isEmpty() && !value.isEmpty()) {
+                out.put(key, value);
+            }
+        }
     }
 }

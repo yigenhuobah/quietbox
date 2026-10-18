@@ -21,6 +21,17 @@
             android:exported="true"
             android:grantUriPermissions="false" />
 
+        <!--
+            AB 探测数据通道：小红书进程读到 key/value 后 call 进来。
+            方向不能反过来——remote prefs 和 openRemoteFile 在目标进程都是只读。
+            authority 与 AbReportProvider.AUTHORITY 必须一致。
+        -->
+        <provider
+            android:name=".AbReportProvider"
+            android:authorities="${applicationId}.ab"
+            android:exported="true"
+            android:grantUriPermissions="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true">

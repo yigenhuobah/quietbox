@@ -81,7 +81,10 @@ Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateTabHelper;|isAutoPlayO
 Lfl0/f0;|o|P1-13 搜索广告|verify_p1_13
 Lcom/xingin/matrix/notedetail/asyncwidgets/advert/AdvertV2View;|a|P1-14 详情广告条|verify_p1_14
 Lcom/xingin/matrix/notedetail/asyncwidgets/advert/AdvertV2View;|b|P1-14 详情广告条|verify_p1_14
-Ldr9/o;|invoke|P1-15 已删除笔记查看|verify_p1_15'
+Ldr9/o;|invoke|P1-15 已删除笔记查看|verify_p1_15
+Ltq/h;|f|P2-1 AB 读取 getValueJustOnce|verify_p2_1
+Ltq/h;|b|P2-1 AB 读取 getValue|verify_p2_1
+Leb6/o;|l|P2-1 ConfigCenter 取值|verify_p2_1'
 
 echo
 echo "APK: $APK"

@@ -84,6 +84,9 @@ public final class Hooks {
                 case NOTE_UNAVAILABLE_VIEW:
                     NoteUnavailableHooks.install(module, cl);
                     break;
+                case AB_TEST_PANEL:
+                    AbTestHooks.install(module, cl);
+                    break;
                 default:
                     break;
             }

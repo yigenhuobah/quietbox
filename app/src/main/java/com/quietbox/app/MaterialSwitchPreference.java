@@ -20,6 +20,10 @@ public class MaterialSwitchPreference extends Preference {
 
     private boolean mChecked;
 
+    public MaterialSwitchPreference(Context context) {
+        this(context, null);
+    }
+
     public MaterialSwitchPreference(Context context, AttributeSet attrs) {
         super(context, attrs);
         setLayoutResource(R.layout.preference_material_switch);

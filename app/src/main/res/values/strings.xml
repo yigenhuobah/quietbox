@@ -18,6 +18,79 @@
     <string name="status_detail_inactive">请在 LSPosed 中启用本模块并勾选小红书</string>
     <string name="status_detail_connecting">绑定成功后自动刷新</string>
 
+    <!-- 底栏 -->
+    <string name="nav_features">功能</string>
+    <string name="nav_ab">测试</string>
+
+    <!-- AB 测试面板 -->
+    <string name="f_p2_1_title">AB 测试面板</string>
+    <string name="f_p2_1_summary">强开小红书灰度实验，并显示探测到的实验开关</string>
+    <string name="ab_panel_title">启用 AB 测试面板</string>
+    <string name="ab_panel_summary">强开灰度实验。首次启用后需重启小红书；之后改单个开关，回到小红书约 3 秒生效。</string>
+    <string name="ab_need_framework">框架未连接，无法写入配置。请确认 LSPosed 已启用本模块。</string>
+    <string name="ab_warning_title">使用前必读</string>
+    <string name="ab_warning">强开的是灰度实验组，不是隐藏福利。部分实验依赖服务端配套数据，强开可能出现页面空白、字段缺失或崩溃。请一次只开一项，确认无异常再继续；出问题关闭对应开关并重启小红书。广告、埋点、直播、服务端调参类实验不在此页提供。</string>
+
+    <string name="ab_group_detail">详情页与信息流</string>
+    <string name="ab_group_playback">播放体验</string>
+    <string name="ab_group_misc">其他推荐</string>
+
+    <string name="ab_detail_text_layout">正文排版优化</string>
+    <string name="ab_detail_text_layout_desc">使用新版正文排版，首屏文字渲染更快。</string>
+    <string name="ab_detail_scroll">详情页滚动优化</string>
+    <string name="ab_detail_scroll_desc">滑动更跟手，减少掉帧。</string>
+    <string name="ab_detail_image_cache">图片详情布局缓存</string>
+    <string name="ab_detail_image_cache_desc">复用图片笔记布局，再次打开更快。</string>
+    <string name="ab_detail_text_pre_parse">正文预解析</string>
+    <string name="ab_detail_text_pre_parse_desc">打开笔记时提前解析正文。</string>
+    <string name="ab_detail_engage_bar">互动栏首帧优化</string>
+    <string name="ab_detail_engage_bar_desc">首帧更快显示完整互动栏。</string>
+    <string name="ab_detail_async_text">异步预计算文本</string>
+    <string name="ab_detail_async_text_desc">把文本计算移出主线程，减少卡顿。</string>
+    <string name="ab_detail_layout_preload">详情页布局预加载</string>
+    <string name="ab_detail_layout_preload_desc">提前构建详情页布局（组号 1）。</string>
+    <string name="ab_profile_preload">个人页布局预取</string>
+    <string name="ab_profile_preload_desc">进入个人页前预取布局。</string>
+
+    <string name="ab_video_progress_hide">进度条自动隐藏</string>
+    <string name="ab_video_progress_hide_desc">播放时进度条更快淡出。</string>
+    <string name="ab_video_resume_position">记住播放位置</string>
+    <string name="ab_video_resume_position_desc">退出后再进入从上次位置继续。</string>
+    <string name="ab_video_background_play">切后台继续播放</string>
+    <string name="ab_video_background_play_desc">离开小红书再回来时不断流。</string>
+    <string name="ab_video_edge_gesture">边缘手势排除</string>
+    <string name="ab_video_edge_gesture_desc">减少滑动时误触系统返回。</string>
+    <string name="ab_video_vibrate">播放震动反馈</string>
+    <string name="ab_video_vibrate_desc">长按倍速等操作带触感反馈。</string>
+    <string name="ab_video_light_ui">视频轻量 UI</string>
+    <string name="ab_video_light_ui_desc">播放界面使用更简洁的控件。</string>
+    <string name="ab_caption_new_style">字幕新样式</string>
+    <string name="ab_caption_new_style_desc">启用新版字幕样式。</string>
+
+    <string name="ab_cmt_keyboard">评论键盘优化</string>
+    <string name="ab_cmt_keyboard_desc">评论输入框与键盘联动更顺畅。</string>
+    <string name="ab_home_preload_video">首页视频预加载</string>
+    <string name="ab_home_preload_video_desc">提前预加载首页视频，起播更快。</string>
+    <string name="ab_search_dark">搜索页深色修复</string>
+    <string name="ab_search_dark_desc">深色模式下搜索页不再强制反色。</string>
+    <string name="ab_home_red_dot">首页红点优化</string>
+    <string name="ab_home_red_dot_desc">红点刷新逻辑优化（组号 1）。</string>
+
+    <string name="ab_current_value">当前值 %1$s</string>
+    <string name="ab_forced_value">已强制为 %1$s</string>
+    <string name="ab_not_read">尚未读取</string>
+
+    <string name="ab_other_title">其他（探测到，未收录）</string>
+    <string name="ab_other_empty">尚未收到探测数据。启用面板并重启小红书，浏览几分钟后再回来查看。</string>
+    <string name="ab_other_last">最近一次探测：%1$s</string>
+    <string name="ab_other_summary">当前值 %1$s · %2$s</string>
+    <string name="ab_other_load_more">加载更多</string>
+    <string name="ab_other_loaded">已显示 %1$d / %2$d 项，继续下拉加载</string>
+    <string name="ab_other_done">已显示全部</string>
+    <string name="ab_other_done_summary">共 %1$d 项</string>
+    <string name="ab_other_risky">不推荐修改</string>
+    <string name="ab_other_unknown">未收录</string>
+
     <!-- 分组 -->
     <string name="group_ads">广告</string>
     <string name="group_content">内容与浏览</string>
