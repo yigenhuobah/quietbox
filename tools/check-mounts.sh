@@ -82,6 +82,22 @@ Lfl0/f0;|o|P1-13 搜索广告|verify_p1_13
 Lcom/xingin/matrix/notedetail/asyncwidgets/advert/AdvertV2View;|a|P1-14 详情广告条|verify_p1_14
 Lcom/xingin/matrix/notedetail/asyncwidgets/advert/AdvertV2View;|b|P1-14 详情广告条|verify_p1_14
 Ldr9/o;|invoke|P1-15 已删除笔记查看|verify_p1_15
+Lcom/xingin/lurker/appscore/ui/AppScoreDialogActivity;|onCreate|P1-16 评分弹窗|verify_p1_16
+Lcom/xingin/xhs/app/ShareApplication;|tryLaunchGpReview|P1-16 系统评分|verify_p1_16
+Lcom/xingin/spi/IGrowthCupidProxyImpl;|pushGuideDialogDialogShow|P1-17 通知引导|verify_p1_17
+Lcom/xingin/spi/IGrowthCupidProxyImpl;|showGuidePopupWindow|P1-17 通知引导|verify_p1_17
+Lcom/xingin/spi/IGrowthCupidProxyImpl;|showPushGuidShowForInside|P1-17 通知引导|verify_p1_17
+Lcom/xingin/spi/IGrowthCupidProxyImpl;|openPushGuideActivity|P1-17 通知引导|verify_p1_17
+Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|shouldShowInternal|P1-18 满意度调研|verify_p1_18
+Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|showForVideo|P1-18 满意度兜底|verify_p1_18
+Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|showForImageText|P1-18 满意度兜底|verify_p1_18
+Lcom/xingin/login/manager/UploadContactServiceExtension;|start|P1-19 通讯录同步|verify_p1_19
+Lcom/xingin/login/manager/UploadContactServiceExtension;|requestContactsSync|P1-19 通讯录同步|verify_p1_19
+Lcom/xingin/login/manager/UploadContactServiceExtension;|installLifecycleObserver|P1-19 通讯录同步|verify_p1_19
+Lcom/xingin/commercial/vision/post/spi/GoodsCommentAddInProcessor;|startAddIn|P1-20 评论带货|verify_p1_20
+Lr7d/m0;|Q|P1-21/22/23 直播/带货/投票卡过滤|verify_p1_21
+Lr7d/m0;|A0|P1-21/22/23 直播/带货/投票卡过滤|verify_p1_21
+Lm7d/s;|Yd|P1-21/22/23 直播/带货/投票卡过滤|verify_p1_21
 Ltq/h;|f|P2-1 AB 读取 getValueJustOnce|verify_p2_1
 Ltq/h;|b|P2-1 AB 读取 getValue|verify_p2_1
 Leb6/o;|l|P2-1 ConfigCenter 取值|verify_p2_1'

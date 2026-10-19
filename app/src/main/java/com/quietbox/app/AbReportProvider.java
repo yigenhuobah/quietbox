@@ -13,7 +13,8 @@ import android.os.Bundle;
  * 方向不能反过来：remote prefs 在目标进程只读，openRemoteFile 也是只读，
  * 所以「小红书读到了哪些 AB key/value」只能由目标进程主动 call 进来。
  *
- * 只接受 report 方法，key/value 都做长度和字符集校验；不存任何敏感信息。
+ * 只接受 report / mount 方法，key/value 都做长度和字符集校验；不存任何敏感信息。
+ * overrides 是模块 App → 目标进程的拉取方向（覆盖表）。
  */
 public final class AbReportProvider extends ContentProvider {
 
@@ -23,6 +24,13 @@ public final class AbReportProvider extends ContentProvider {
     /** 本地保存一份覆盖表，供目标进程运行中拉取（remote prefs 在宿主里是启动快照）。 */
     public static final String KEY_PANEL_ENABLED = "panel_enabled";
     public static final String KEY_OVERRIDES = "ab_overrides";
+
+    /** 挂载自检：目标进程启动时推送一次统计，供模块 App 判断版本兼容性。 */
+    public static final String KEY_MOUNT_OK = "mount_ok";
+    public static final String KEY_MOUNT_MISS = "mount_miss";
+    public static final String KEY_MOUNT_TIME = "mount_time";
+    /** mount_miss 的明细，格式 "P0-1,P1-13"，供 logcat/排障对应。 */
+    public static final String KEY_MOUNT_DETAIL = "mount_detail";
 
     private static final int MAX_KEY = 128;
     private static final int MAX_VALUE = 256;
@@ -44,6 +52,19 @@ public final class AbReportProvider extends ContentProvider {
             out.putBoolean(KEY_PANEL_ENABLED, sp.getBoolean(KEY_PANEL_ENABLED, false));
             out.putString(KEY_OVERRIDES, sp.getString(KEY_OVERRIDES, ""));
             return out;
+        }
+        if ("mount".equals(method)) {
+            if (extras == null) {
+                return null;
+            }
+            SharedPreferences sp = getContext().getSharedPreferences(PREFS, 0);
+            sp.edit()
+                    .putInt(KEY_MOUNT_OK, extras.getInt(KEY_MOUNT_OK, 0))
+                    .putInt(KEY_MOUNT_MISS, extras.getInt(KEY_MOUNT_MISS, 0))
+                    .putString(KEY_MOUNT_DETAIL, extras.getString(KEY_MOUNT_DETAIL, ""))
+                    .putLong(KEY_MOUNT_TIME, System.currentTimeMillis())
+                    .apply();
+            return new Bundle();
         }
         if (!"report".equals(method) || extras == null) {
             return null;

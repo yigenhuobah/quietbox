@@ -6,6 +6,11 @@
         android:layout="@layout/preference_status_card"
         android:selectable="false" />
 
+    <Preference
+        android:key="warning_mount"
+        android:layout="@layout/preference_warning_banner"
+        android:selectable="false" />
+
     <PreferenceCategory android:title="@string/group_ads">
 
         <com.quietbox.app.MaterialSwitchPreference
@@ -32,6 +37,38 @@
             android:icon="@drawable/ic_ads"
             android:key="p1_14_note_detail_ad_banner" />
 
+        <com.quietbox.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_ads"
+            android:key="p1_20_goods_comment_block" />
+
+        <com.quietbox.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_ads"
+            android:key="p1_21_feed_live_card_block" />
+
+        <com.quietbox.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_ads"
+            android:key="p1_22_feed_goods_card_block" />
+
+        <com.quietbox.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_ads"
+            android:key="p1_23_feed_vote_card_block" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/group_nag">
+
+        <com.quietbox.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_ui"
+            android:key="p1_16_score_guide_block" />
+
+        <com.quietbox.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_ui"
+            android:key="p1_17_push_guide_block" />
+
+        <com.quietbox.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_ui"
+            android:key="p1_18_content_rating_block" />
+
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/group_content">
@@ -51,6 +88,10 @@
         <com.quietbox.app.MaterialSwitchPreference
             android:icon="@drawable/ic_ui"
             android:key="p0_5_screenshot_detect_off" />
+
+        <com.quietbox.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_ui"
+            android:key="p1_19_contact_sync_off" />
 
     </PreferenceCategory>
 

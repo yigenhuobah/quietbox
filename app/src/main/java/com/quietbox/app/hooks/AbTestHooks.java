@@ -6,6 +6,8 @@ import android.os.Bundle;
 import android.util.Log;
 
 import com.quietbox.app.AbReportProvider;
+import com.quietbox.app.AbTest;
+import com.quietbox.app.AbTests;
 import com.quietbox.app.Config;
 import com.quietbox.app.Feature;
 import com.quietbox.app.HookState;
@@ -74,7 +76,7 @@ public final class AbTestHooks {
         }
     }
 
-    /** tq.h 的返回值是已经按 Type 解析好的对象；按原对象类型转换强制值。 */
+    /** tq.h 的返回值是已经按 Type 解析好的对象；按 AbTest 声明的类型转换强制值。 */
     private static XposedInterface.Hooker valueHook(XposedModule module, Feature f) {
         return chain -> {
             Object result = chain.proceed();
@@ -83,7 +85,7 @@ public final class AbTestHooks {
                 if (arg instanceof String) {
                     String key = (String) arg;
                     AbRuntime.observe(key, result);
-                    String forced = AbRuntime.override(key);
+                    AbTest forced = AbRuntime.override(key);
                     if (forced != null) {
                         return coerce(forced, result);
                     }
@@ -95,7 +97,11 @@ public final class AbTestHooks {
         };
     }
 
-    /** eb6.o#l 直接返回字符串，调用方自己用 Gson 解析。 */
+    /**
+     * eb6.o#l 直接返回字符串，调用方自己用 Gson 按 TypeToken 解析。
+     * 因此这里喂回去的也必须是 Gson 能按目标类型解析的字面量，否则解析失败
+     * 会静默回落到默认值。
+     */
     private static XposedInterface.Hooker stringHook(XposedModule module, Feature f) {
         return chain -> {
             Object result = chain.proceed();
@@ -104,9 +110,9 @@ public final class AbTestHooks {
                 if (arg instanceof String) {
                     String key = (String) arg;
                     AbRuntime.observe(key, result);
-                    String forced = AbRuntime.override(key);
+                    AbTest forced = AbRuntime.override(key);
                     if (forced != null) {
-                        return forced;
+                        return forced.forcedLiteral();
                     }
                 }
             } catch (Throwable t) {
@@ -116,29 +122,28 @@ public final class AbTestHooks {
         };
     }
 
-    private static Object coerce(String value, Object original) {
-        try {
-            if (original instanceof Boolean) {
-                return Boolean.valueOf(value);
-            }
-            if (original instanceof Integer) {
-                return Integer.valueOf(value);
-            }
-            if (original instanceof Long) {
-                return Long.valueOf(value);
-            }
-            if (original instanceof Float) {
-                return Float.valueOf(value);
-            }
-            if (original instanceof Double) {
-                return Double.valueOf(value);
-            }
-            if (original instanceof String) {
-                return value;
-            }
-        } catch (Throwable ignored) {
+    /**
+     * 按声明的 valueType 产出原语值；运行期 original 的类型只作兜底校验。
+     *
+     * 三种失效形态都要防住：
+     * - original 是 null（key 尚未下发）：按声明类型直接给值，不能静默丢弃；
+     * - original 类型与声明不符：以声明为准，避免 Boolean 收到 "1" 反向变 false；
+     * - 声明值解析不出来：返回 original 并告警，绝不猜。
+     */
+    private static Object coerce(AbTest test, Object original) {
+        Object target = test.targetPrimitive();
+        if (target == null) {
+            Log.w(TAG, "P2-1 coerce fallback: " + test.key + " forceValue="
+                    + test.forceValue + " 无法解析为 " + test.valueType);
+            return original;
         }
-        return original;
+        if (original != null && !(original instanceof Boolean)
+                && !(original instanceof Number) && !(original instanceof String)) {
+            Log.w(TAG, "P2-1 coerce fallback: " + test.key + " 运行期类型 "
+                    + original.getClass().getName() + " 不在支持范围");
+            return original;
+        }
+        return target;
     }
 
     /**
@@ -211,15 +216,36 @@ public final class AbTestHooks {
             sContext = context;
         }
 
-        static String override(String key) {
+        static AbTest override(String key) {
             if (!sEnabled || key == null) {
                 return null;
             }
             String value = sOverrides.get(key);
-            if (value != null && sLogged.add(key)) {
-                Log.i(TAG, "P2-1 override " + key + "=" + value);
+            if (value == null) {
+                return null;
             }
-            return value;
+            AbTest test = AbTests.byKey(key);
+            if (test == null) {
+                // 用户从「其他」列表手填的未收录 key：按值的字面形状推断类型。
+                test = guessType(key, value);
+            }
+            if (test != null && sLogged.add(key)) {
+                Log.i(TAG, "P2-1 override " + key + "=" + value
+                        + " type=" + test.valueType);
+            }
+            return test;
+        }
+
+        /** 未收录 key 的类型推断："1"/"0"/纯数字按组号，"true"/"false"按布尔。 */
+        private static AbTest guessType(String key, String value) {
+            AbTest.ValueType type;
+            try {
+                Integer.valueOf(value);
+                type = AbTest.ValueType.INT;
+            } catch (NumberFormatException e) {
+                type = AbTest.ValueType.BOOL;
+            }
+            return AbTest.forKey(key, value, type);
         }
         static void observe(String key, Object value) {
             if (!sEnabled || key == null || value == null || key.length() > 128) {

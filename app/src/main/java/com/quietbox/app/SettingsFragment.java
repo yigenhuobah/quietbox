@@ -85,6 +85,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
 
         Preference status = findPreference("status");
         if (status != null) {
+            status.setTitle(R.string.status_title);
             XposedService service = ServiceBridge.get();
             if (service == null) {
                 status.setTitle(R.string.status_connecting);
@@ -106,7 +107,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                 boolean injected = isTargetRunning(service);
                 if (!scoped) {
                     status.setTitle(R.string.status_inactive);
-                    status.setSummary(R.string.status_detail_no_scope);
+                    status.setSummary(R.string.status_detail_inactive);
                 } else if (injected) {
                     status.setTitle(R.string.status_active);
                     status.setSummary(getString(R.string.status_detail_active, api));
@@ -114,6 +115,19 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                     status.setTitle(R.string.status_connected);
                     status.setSummary(R.string.status_detail_not_running);
                 }
+            }
+        }
+
+        // 版本不兼容横幅：只在目标进程上报"挂载大面积失败"时显示，平时隐藏。
+        Preference warning = findPreference("warning_mount");
+        if (warning != null) {
+            MountReport report = new MountReport(requireContext());
+            if (report.incompatible()) {
+                warning.setSummary(getString(R.string.mount_warning, report.miss(),
+                        report.ok() + report.miss()));
+                warning.setVisible(true);
+            } else {
+                warning.setVisible(false);
             }
         }
 

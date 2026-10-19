@@ -13,11 +13,10 @@
     <string name="status_inactive">未激活</string>
     <string name="status_connecting">正在连接框架…</string>
     <string name="status_detail_active">框架 API %1$d · 已注入小红书</string>
-    <string name="status_detail_no_scope">框架已连接，但作用域未勾选小红书</string>
     <string name="status_detail_not_running">启动小红书后生效。若已启动仍显示此状态，请检查模块是否已在 LSPosed 中启用</string>
     <string name="status_detail_inactive">请在 LSPosed 中启用本模块并勾选小红书</string>
     <string name="status_detail_connecting">绑定成功后自动刷新</string>
-
+    <string name="mount_warning">当前小红书版本可能不兼容：%1$d/%2$d 个挂载点失效。请先确认小红书版本是 9.50.0，再查看 logcat（tag QuietBox）确认失效的功能；升级小红书后需要重新适配。</string>
     <!-- 底栏 -->
     <string name="nav_features">功能</string>
     <string name="nav_ab">测试</string>
@@ -80,7 +79,7 @@
     <string name="ab_home_preload_video">首页视频预加载</string>
     <string name="ab_home_preload_video_desc">提前预加载首页视频，起播更快。</string>
     <string name="ab_search_dark">搜索页深色修复</string>
-    <string name="ab_search_dark_desc">深色模式下搜索页不再强制反色。</string>
+    <string name="ab_search_dark_desc">默认已生效，这里把值钉死，防服务端下发把修复关回去。</string>
     <string name="ab_home_red_dot">首页红点优化</string>
     <string name="ab_home_red_dot_desc">红点刷新逻辑优化（组号 1）。</string>
 
@@ -101,6 +100,7 @@
 
     <!-- 分组 -->
     <string name="group_ads">广告</string>
+    <string name="group_nag">打扰与引导</string>
     <string name="group_content">内容与浏览</string>
     <string name="group_ui">界面与隐私</string>
     <string name="group_share">分享与播放</string>
@@ -139,7 +139,23 @@
     <string name="f_p1_14_title">详情页广告条屏蔽</string>
     <string name="f_p1_14_summary">隐藏笔记详情页底部的二跳广告条</string>
     <string name="f_p1_15_title">已删除笔记查看</string>
-    <string name="f_p1_15_summary">笔记被删除后仍用本地已缓存的内容展示</string>
+    <string name="f_p1_15_summary">实验性：笔记被删除后仍用本地已缓存的内容展示，未经真实场景实测</string>
+    <string name="f_p1_16_title">评分引导弹窗屏蔽</string>
+    <string name="f_p1_16_summary">不弹「满意吗 / 去评分」和系统评分</string>
+    <string name="f_p1_17_title">通知引导弹窗屏蔽</string>
+    <string name="f_p1_17_summary">不弹「开启通知」引导；手动开通知不受影响</string>
+    <string name="f_p1_18_title">满意度调研条屏蔽</string>
+    <string name="f_p1_18_summary">详情页不再弹出「对内容满意吗」</string>
+    <string name="f_p1_19_title">通讯录同步关闭</string>
+    <string name="f_p1_19_summary">不上传通讯录，不再有通讯录推荐好友</string>
+    <string name="f_p1_20_title">评论区带货插入屏蔽</string>
+    <string name="f_p1_20_summary">评论区顶部不再插入商品卡</string>
+    <string name="f_p1_21_title">直播卡过滤</string>
+    <string name="f_p1_21_summary">信息流里不显示直播卡片</string>
+    <string name="f_p1_22_title">带货卡过滤</string>
+    <string name="f_p1_22_summary">信息流里不显示商品笔记卡</string>
+    <string name="f_p1_23_title">投票卡过滤</string>
+    <string name="f_p1_23_summary">信息流里不显示投票卡片</string>
 
     <!-- 复制链接子选项 -->
     <string name="p1_9_strip_token_title">同时删除 xsec_token</string>
