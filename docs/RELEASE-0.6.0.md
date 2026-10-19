@@ -48,3 +48,7 @@
   请以 logcat（tag `QuietBox`）为准。
 
 ## 安装包
+
+`quietbox-0.6.0.apk`，versionCode 9，2,571,548 字节。
+
+SHA-256: `c26f7ea1b82f7fd662668a67e054cf9b5f1b6189cab3eb2a7e799b20386e6097`
