@@ -156,8 +156,6 @@ release 优先读仓库根目录的 `keystore.properties` 签名（该文件不�
 工具链：Gradle 8.13（wrapper） · AGP 8.12.2 · compileSdk 37 · minSdk 29 · Java 17。
 首次构建需要自己提供 `local.properties`（`sdk.dir=<SDK 路径>`）。
 
-维护者请看 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
-
 ## 许可证
 
 [MIT License](LICENSE)
