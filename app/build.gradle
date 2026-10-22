@@ -3,14 +3,14 @@ plugins {
 }
 
 // 签名配置从 keystore.properties 读（该文件在 .gitignore 里，不入仓库）。
-// 没提供时回退 Android 默认 debug 签名：仓库开箱即可构建，任何人都能装上，
-// 只是不能算"正式签名"版本。等自己 keystore 稳定了再补这个文件。
-
+// release 必须使用正式签名：缺失或 storeFile 未配置时在执行前硬失败，
+// 禁止回退 debug 签名、禁止产出未签名包。debug 不受影响。
 def keystorePropsFile = rootProject.file("keystore.properties")
 def keystoreProps = new Properties()
 if (keystorePropsFile.exists()) {
     keystorePropsFile.withInputStream { keystoreProps.load(it) }
 }
+def hasKeystore = keystorePropsFile.exists() && keystoreProps.getProperty("storeFile")
 
 android {
     namespace 'com.quietbox.app'
@@ -25,24 +25,17 @@ android {
         applicationId "io.github.yigenhuobah.quietbox"
         minSdk 29
         targetSdk 36
-        versionCode 10
-        versionName "0.6.1"
+        versionCode 11
+        versionName "0.7.0"
     }
 
     signingConfigs {
-        if (keystoreProps.getProperty("storeFile")) {
+        if (hasKeystore) {
             release {
                 storeFile rootProject.file(keystoreProps.getProperty("storeFile"))
                 storePassword keystoreProps.getProperty("storePassword")
                 keyAlias keystoreProps.getProperty("keyAlias")
                 keyPassword keystoreProps.getProperty("keyPassword")
-            }
-        } else {
-            // 没有自备 keystore 时，release 显式借用 debug 证书。
-            // 必须显式指定：不指定的话 AGP 会产出一个没签名的 APK，
-            // 安装时报 INSTALL_PARSE_FAILED_NO_CERTIFICATES。
-            release {
-                initWith debug
             }
         }
     }
@@ -97,4 +90,19 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'com.google.android.material:material:1.12.0'
     implementation 'androidx.preference:preference:1.2.1'
+
+    testImplementation 'junit:junit:4.13.2'
+    // Config 的公开方法签名引用 XposedModule；主源码 compileOnly 在单测运行期不可见，
+    // 这里补同一坐标（不新增新库）。
+    testImplementation 'io.github.libxposed:api:102.0.0'
+}
+
+// release 必须使用正式签名：keystore.properties 缺失 / storeFile 未配置时，
+// 只要本次任务图里出现 release 变体任务就在执行前失败，避免静默产出 debug 签名版本。
+// 用 taskGraph.whenReady 覆盖 assemble/package/install/bundle 全部入口；debug 不受影响。
+def releaseTaskNames = ["assembleRelease", "packageRelease", "installRelease", "bundleRelease"]
+gradle.taskGraph.whenReady { graph ->
+    if (!hasKeystore && graph.allTasks.any { it.project == project && releaseTaskNames.contains(it.name) }) {
+        throw new GradleException("缺少有效 keystore.properties（storeFile 未配置）：release 构建必须使用正式签名")
+    }
 }

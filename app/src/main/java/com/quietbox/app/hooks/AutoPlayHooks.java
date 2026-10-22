@@ -6,7 +6,7 @@ import com.quietbox.app.HookState;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * P1-12 自动播放与画质偏好。
+ * UI-05 自动播放与画质偏好。
  * 只实现自动播放：isAutoPlayOpen 是 SPI 契约方法（详情页），
  * isAutoPlayOpenServer 是 tab 场景实际被调用的那个（VideoTabProxyImpl.java:70
  * 调 AutoScrollStateTabHelper.INSTANCE.isAutoPlayOpenServer()），故两个类各挂两个。

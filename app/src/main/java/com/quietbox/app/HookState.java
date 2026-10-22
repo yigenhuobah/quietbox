@@ -3,74 +3,114 @@ package com.quietbox.app;
 import android.util.Log;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * 目标进程内的诊断日志与挂载统计。
+ * 目标进程内的诊断状态：每个功能的注册标签、命中次数、跳过原因。
  *
- * 正式 UI 不展示"已注册挂载点 / 命中次数"（按用户要求完全隐藏），因此大部分状态
- * 只写 logcat，排障时用。真正带细节的日志由 HookKit 负责，所以 hit / note 保持
- * 空实现或纯日志，避免重复刷屏。
+ * 真正带细节的日志由 HookKit 打进 logcat（tag QuietBox）；这里只存计数快照，
+ * 由 hooks 包的 Report 定期回传给模块 App 的 StatusProvider，供诊断页展示。
  *
- * 唯一例外是「挂载统计」：小红书升级后挂载点可能大面积失效，而 UI 侧完全看不出来，
- * 用户只会觉得"开关没用"。installAll 结束时把 ok/miss 计数与 miss 明细推给模块 App，
- * 由它判断是否显示"当前小红书版本不兼容"横幅。计数健康时不显示，UI 仍是零诊断内容。
+ * 线程安全：命中可能来自任意线程（含 binder 线程），全部用并发容器。
  */
 public final class HookState {
 
     private static final String TAG = "QuietBox";
 
-    /** Feature → {ok 数, miss 数}。 */
-    private static final Map<Feature, int[]> MOUNTS = new HashMap<>();
+    private static final ConcurrentMap<Feature, State> STATES = new ConcurrentHashMap<>();
 
     private HookState() {
     }
 
+    private static final class State {
+        final Set<String> labels = ConcurrentHashMap.newKeySet();
+        final AtomicLong hits = new AtomicLong();
+        volatile String skip;
+
+        void markSkip(String reason) {
+            if (reason != null) {
+                skip = reason;
+            }
+        }
+    }
+
+    private static State state(Feature f) {
+        State s = STATES.get(f);
+        if (s == null) {
+            s = new State();
+            State prev = STATES.putIfAbsent(f, s);
+            if (prev != null) {
+                s = prev;
+            }
+        }
+        return s;
+    }
+
+    /** 功能开始安装；仅用于日志，不代表任何 hook 已注册。 */
     public static void enable(Feature f) {
         Log.i(TAG, f.id + " enabled");
     }
 
-    /** HookKit.install 已经打过 "registered <label>"。 */
     public static void installed(Feature f, String label) {
-        count(f, true);
+        state(f).labels.add(label);
     }
 
-    /** HookKit.findClass/findMethod 已经打过 "skip: ... not found"。 */
-    public static void markNotFound(Feature f) {
-        count(f, false);
+    public static void markNotFound(Feature f, String reason) {
+        state(f).markSkip(reason);
     }
 
-    /** HookKit.hit 已经打过命中日志。 */
-    public static void hit(Feature f) {
+    /** 命中计数 +1，返回累加后的次数。 */
+    public static long hit(Feature f) {
+        return state(f).hits.incrementAndGet();
     }
 
+    /** 安装阶段的补充说明：只写日志，不进入诊断页。 */
     public static void note(Feature f, String text) {
         if (text != null) {
             Log.i(TAG, f.id + " " + text);
         }
     }
 
-    private static void count(Feature f, boolean ok) {
-        synchronized (MOUNTS) {
-            int[] c = MOUNTS.get(f);
-            if (c == null) {
-                c = new int[2];
-                MOUNTS.put(f, c);
-            }
-            c[ok ? 0 : 1]++;
-        }
+    // ---- 快照（供 Report / 挂载统计回传） ----
+
+    public static List<Feature> touched() {
+        return new ArrayList<>(STATES.keySet());
     }
 
-    /** 统计快照：ok/miss 计数 + 有 miss 的功能 id 列表 + 本次启用的功能数/坏掉的功能数。 */
+    public static List<String> labels(Feature f) {
+        State s = STATES.get(f);
+        if (s == null) {
+            return Collections.emptyList();
+        }
+        List<String> out = new ArrayList<>(s.labels);
+        Collections.sort(out);
+        return out;
+    }
+
+    public static long hitCount(Feature f) {
+        State s = STATES.get(f);
+        return s == null ? 0L : s.hits.get();
+    }
+
+    public static String skipReason(Feature f) {
+        State s = STATES.get(f);
+        return s == null ? null : s.skip;
+    }
+
+    /**
+     * 挂载统计快照。计数按「功能」去重：
+     * ok = 至少注册成功一个挂载点的功能数，miss/bad = 有 skip 的功能数。
+     */
     public static final class Snapshot {
         public final int ok;
         public final int miss;
         public final List<String> missed;
-        /** 本次启用的功能数（MOUNTS.size()）。 */
         public final int features;
-        /** miss > 0 的功能数。 */
         public final int bad;
 
         Snapshot(int ok, int miss, List<String> missed, int features, int bad) {
@@ -82,37 +122,25 @@ public final class HookState {
         }
     }
 
-    /** 取一份统计快照，不清空。供推送线程判断成功后再 clear()。 */
     public static Snapshot snapshot() {
         int ok = 0;
-        int miss = 0;
         int bad = 0;
         List<String> missed = new ArrayList<>();
-        synchronized (MOUNTS) {
-            for (Map.Entry<Feature, int[]> e : MOUNTS.entrySet()) {
-                int[] c = e.getValue();
-                ok += c[0];
-                miss += c[1];
-                if (c[1] > 0) {
+        synchronized (STATES) {
+            for (Feature f : STATES.keySet()) {
+                boolean hasLabel = !labels(f).isEmpty();
+                boolean hasSkip = skipReason(f) != null;
+                if (hasLabel) {
+                    ok++;
+                }
+                if (hasSkip) {
                     bad++;
-                    missed.add(e.getKey().id);
+                    missed.add(f.id);
                 }
             }
-            return new Snapshot(ok, miss, missed, MOUNTS.size(), bad);
+            Collections.sort(missed);
+            return new Snapshot(ok, bad, missed, STATES.size(), bad);
         }
     }
 
-    /** 清空统计（推送成功后调用）。 */
-    public static void clear() {
-        synchronized (MOUNTS) {
-            MOUNTS.clear();
-        }
-    }
-
-    /** 取一份统计快照并清零，供 installAll 结束时推送。 */
-    public static Snapshot drain() {
-        Snapshot s = snapshot();
-        clear();
-        return s;
-    }
 }

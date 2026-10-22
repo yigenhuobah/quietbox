@@ -14,7 +14,7 @@ import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * P0-2 信息流广告过滤。
+ * AD-02 信息流广告过滤。
  *
  * 9.50.0 的信息流广告有两种来源（2026-10-17 DexSQL 复核）：
  *

@@ -13,7 +13,7 @@ import java.util.List;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * P1-11 水印策略。
+ * EN-01 水印策略。
  *
  * <p>真链路（9.50.0 实测，LSPosed 侧确认命中）：笔记图片库长按「保存图片」走
  * {@code nd8.i/nd8.j}（内部 tag "SaveImagesHelper"，classes6.dex），

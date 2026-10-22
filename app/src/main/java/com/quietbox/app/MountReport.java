@@ -9,13 +9,10 @@ import android.content.SharedPreferences;
  * 数据由目标进程在 {@link com.quietbox.app.hooks.Hooks} 安装完挂载点后，经
  * {@link AbReportProvider} 的 "mount" 方法一次性写入。模块 App 只读。
  *
- * 判据刻意保守：只有「确实收到过统计」且「miss 超过阈值」才认为不兼容，
- * 避免统计缺失（旧版本模块、provider 被拦）时误报。
+ * 这是模块专属扩展，保留给排障与后续展示；统一异常横幅改用
+ * {@link StatusProvider#failedFeatureCount(Context)} 按「功能去重、≥2 功能失效」判断。
  */
 public final class MountReport {
-
-    /** miss 数达到这个值就认为当前小红书版本大概率不兼容。 */
-    public static final int MISS_THRESHOLD = 5;
 
     private final SharedPreferences mSp;
 
@@ -48,10 +45,5 @@ public final class MountReport {
     /** 有 miss 的功能 id，逗号分隔。 */
     public String detail() {
         return mSp.getString(AbReportProvider.KEY_MOUNT_DETAIL, "");
-    }
-
-    /** 是否应该显示「当前小红书版本不兼容」横幅。 */
-    public boolean incompatible() {
-        return received() && bad() >= 2;
     }
 }

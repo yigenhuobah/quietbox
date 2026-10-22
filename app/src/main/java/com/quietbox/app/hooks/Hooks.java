@@ -25,7 +25,11 @@ public final class Hooks {
     private Hooks() {
     }
 
-    public static void installAll(XposedModule module, ClassLoader cl) {
+    /**
+     * @param mainProcess 当前是否为主进程（进程名 == 包名）。诊断回传只在主进程启动，
+     *                    避免子进程未装全 hook 时把功能误报为失败。
+     */
+    public static void installAll(XposedModule module, ClassLoader cl, boolean mainProcess) {
         Config config;
         try {
             config = Config.load(module);
@@ -38,6 +42,11 @@ public final class Hooks {
             // 全关时也要推一次 0/0，清掉上一次运行留下的不兼容告警。
             pushMountReport(module, cl);
             return;
+        }
+        if (mainProcess) {
+            Report.start();
+        } else {
+            module.log(Log.INFO, TAG, "non-main process, status report disabled");
         }
         for (Feature f : Feature.values()) {
             if (f.blocked()) {
@@ -55,9 +64,9 @@ public final class Hooks {
     }
 
     /**
-     * 挂载统计推送：小红书升级后挂载点可能大面积失效，UI 侧看不出来。
-     * installAll 结束时统计 ok/miss，挂 Application#onCreate 拿 Context 后
-     * 一次性推给模块 App，由它判断是否显示不兼容横幅。
+     * 挂载统计推送（模块专属扩展，保留给 MountReport 排障用）。
+     * installAll 结束时按「功能去重」统计 ok/miss，挂 Application#onCreate 拿 Context 后
+     * 一次性推给模块 App；统一异常横幅改用 StatusProvider 的逐功能回传数据。
      *
      * 全关时也会走到这里（推 0/0 清旧告警），因此不能假设至少有一个功能开着。
      */
@@ -85,9 +94,8 @@ public final class Hooks {
                                     android.util.Log.i(TAG, "mount report sent=" + sent
                                             + " ok=" + snap.ok + " miss=" + snap.miss
                                             + " bad=" + snap.bad + " features=" + snap.features);
-                                    if (sent) {
-                                        HookState.clear();
-                                    }
+                                    // 不清空 HookState：同一份状态还要供 Report 周期回传，
+                                    // 清掉会让诊断页丢失 registered/skip。
                                     // 每进程只尝试一次：Application#onCreate 可能被多个
                                     // Application 实例重复触发，失败重试只会刷日志，
                                     // 进程内也没有更好的重试时机。
@@ -192,8 +200,7 @@ public final class Hooks {
             }
         } catch (Throwable t) {
             module.log(Log.ERROR, TAG, f.id + " install threw", t);
-            HookState.markNotFound(f);
-            HookState.note(f, "安装异常");
+            HookState.markNotFound(f, "安装异常");
         }
     }
 }

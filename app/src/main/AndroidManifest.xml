@@ -1,9 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+        Android 11+ 的包可见性：getPackageInfo / getPackagesForUid 默认看不到目标应用，
+        状态卡与 StatusProvider 的 UID 校验会误判。必须显式声明。
+    -->
+    <queries>
+        <package android:name="com.xingin.xhs" />
+    </queries>
+
     <application
         android:allowBackup="false"
-        android:description="@string/module_description"
+        android:description="@string/app_description"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -22,8 +30,18 @@
             android:grantUriPermissions="false" />
 
         <!--
-            AB 探测数据通道：小红书进程读到 key/value 后 call 进来。
+            诊断数据通道：目标进程的 HookState 经 hooks/Report 把 reg/hit/skip 回传到这里。
             方向不能反过来——remote prefs 和 openRemoteFile 在目标进程都是只读。
+            authority 与 StatusProvider.AUTHORITY 必须一致。
+        -->
+        <provider
+            android:name=".StatusProvider"
+            android:authorities="${applicationId}.status"
+            android:exported="true"
+            android:grantUriPermissions="false" />
+
+        <!--
+            AB 探测数据通道：小红书进程读到 key/value 后 call 进来。
             authority 与 AbReportProvider.AUTHORITY 必须一致。
         -->
         <provider

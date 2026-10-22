@@ -1,5 +1,46 @@
 # 更新日志
 
+## v0.7.0 — 2026-10-23
+
+统一界面、诊断与功能编号。历史条目中的旧编号（P0-x / P1-x / P2-x）保留原样，仅作记录。
+
+### 新增
+
+- 单页设置 + 二级页导航：去掉 2 Tab 底栏，主页面为设置页，实验、诊断、关于改为二级页；二级页显示返回箭头，返回后保留主页面滚动位置。
+- 诊断页：逐功能显示 `编号 标题 · registered · hit N · skip 原因`，无数据用 `—`；页首显示刷新时间，页尾提供刷新与复制。
+- 关于页：模块版本、目标应用、源码、四模块互链（当前模块标注）、免责声明与 MIT 许可证；互链为蓝色可点击链接。
+- 诊断回传通道：`HookState` + `hooks/Report` + `StatusProvider`，目标进程只在主进程回传，Provider 校验调用方 UID，键走白名单，value 上限 256 字符，hit 多进程取历史最大值。
+- 异常横幅：目标应用版本未适配，或已启用且 ≥2 个功能明确失效时显示；删除 `MISS_THRESHOLD=5`，统一按“功能去重、≥2 功能失效”判断。
+- JUnit 4.13.2 单测：`FeatureTest`、`ConfigTest`、`ReportProtocolTest`、`HookStateTest`。
+
+### 变更
+
+- 功能编号统一为 AD/UI/PV/EN/EX：24 项对应 AD-01~11、UI-01~05、PV-01~04、EN-01~02、EX-01~02；remote prefs key、AB key、applicationId、namespace 均未改动。
+- 编号映射：P0-1~P0-3 → AD-01~AD-03；P0-4 → UI-04；P0-5 → PV-01；P0-6 → EN-02；P1-7 → AD-04；P1-8 → AD-11；P1-9 → PV-03；P1-10 → PV-04；P1-11 → EN-01；P1-12 → UI-05；P1-13~P1-14 → AD-05~AD-06；P1-15 → EX-01；P1-16~P1-18 → UI-01~UI-03；P1-19 → PV-02；P1-20~P1-23 → AD-07~AD-10；P2-1 → EX-02。
+- 默认值从全关改为“净化开、敏感关”：15 项 AD/UI 功能默认开启，PV/EN/EX 与 3 项 blocked 功能默认关闭。仅影响新安装，已保存配置不迁移、不覆盖。
+- 设置页按 AD → UI → PV → EN → EX 重新分组；blocked 功能保留编号与条目，但不在设置页渲染。
+- 状态卡改为四态（正在连接框架… / 未激活 / 框架已连接 / 已激活）+ detail 行（框架 API、目标版本、remote prefs）。
+- 用户可见文案统一进 `strings.xml`，统一无人称，功能标题改为 4–8 字动宾短语。
+- 构建基线：AGP 8.12.2 → 8.13.2；compileSdk 37、minSdk 29、targetSdk 36、Gradle 8.13、Java 17 不变；未使用 AAR metadata 豁免。
+- release 签名：缺少 `keystore.properties` 或 `storeFile` 未配置时直接失败，不再回退 debug 签名。
+
+### 文档
+
+- README 功能表改用新编号与默认值，补充单页 + 诊断/关于、四模块互链。
+- CHANGELOG 新增 0.7.0 段。
+
+### 验证
+
+- `./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease` 通过。
+- 单测 28 项通过。
+- 真机 25102RKBEC（Android 17 / LSPosed 2.2.1 / 小红书 9.50.0）：21 个功能、0 miss / 0 bad；诊断页收到 `AD-01 hit 2`、`AD-02 hit 1` 等数据；单页 + 二级页、状态卡四态、关于页四模块互链、AB 面板均正常；无 FATAL/ANR。
+- 默认值只影响新安装；本次设备保留已保存配置，未覆盖。
+
+APK: quietbox-0.7.0.apk
+versionCode: 11
+大小: 2,546,156 字节
+SHA-256: f2b0e9c9be167f2675d1633b0fa2aa81c68587ef3528ccd272fae64e0b588e14
+
 ## v0.6.1 — 2026-10-20
 
 修复 0.6.0 静态审查发现的问题：

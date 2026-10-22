@@ -36,7 +36,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 「测试」页。
+ * 「实验」页（EX-02 AB 测试面板）。
  *
  * 顶部是面板总开关和「导出全量实验」，下面是精选的高价值实验，
  * 最底部是模块探测到但未收录的 key（50 条一批，滚到底自动加载）。
@@ -192,7 +192,8 @@ public class AbTestFragment extends PreferenceFragmentCompat {
         mAb.syncOverrides();
         boolean master = masterOverride != null
                 ? masterOverride
-                : mStore.get(Feature.AB_TEST_PANEL.key, false);
+                : mStore.get(Feature.AB_TEST_PANEL.key,
+                Feature.AB_TEST_PANEL.defaultEnabled);
         // remote 是启动时的权威值；本地副本给运行中的拉取通道用，二者保持一致。
         if (mStore.remote()) {
             mAb.syncPanelEnabled(master);
@@ -325,7 +326,7 @@ public class AbTestFragment extends PreferenceFragmentCompat {
     }
 
     private String otherTag(String key) {
-        String k = key.toLowerCase();
+        String k = key.toLowerCase(Locale.ROOT);
         if (k.contains("_ad") || k.contains("ads_") || k.contains("track")
                 || k.contains("apm") || k.startsWith("andr_live")
                 || k.contains("_config") || k.contains("_interval")) {

@@ -11,7 +11,7 @@ import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * P1-13 搜索广告过滤。
+ * AD-05 搜索广告过滤。
  *
  * 9.50.0 的搜索结果广告插入点在 Lfl0/f0.o(...)Ljava/util/List;
  * （遍历 response.items，modelType=="ads" 时取 getAds() 塞进返回列表）。

@@ -17,7 +17,7 @@ import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * P0-5 截图检测关闭。
+ * PV-01 截图检测关闭。
  * 检测器类名每次发版都变（9.49.1 是 idc.d1/j1，9.50.0 是 xec.d1/j1），禁止硬编码。
  * 定位方案：按结构特征在 ContentObserver 注册时定位外层管理类 ——
  *   观察者类 extends ContentObserver、声明 onChange(boolean, Uri)、是嵌套类；

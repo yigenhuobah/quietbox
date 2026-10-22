@@ -139,13 +139,13 @@ public final class AbTestHooks {
     private static Object coerce(AbTest test, Object original) {
         Object target = test.targetPrimitive();
         if (target == null) {
-            Log.w(TAG, "P2-1 coerce fallback: " + test.key + " forceValue="
+            Log.w(TAG, "EX-02 coerce fallback: " + test.key + " forceValue="
                     + test.forceValue + " 无法解析为 " + test.valueType);
             return original;
         }
         if (original != null && !(original instanceof Boolean)
                 && !(original instanceof Number) && !(original instanceof String)) {
-            Log.w(TAG, "P2-1 coerce fallback: " + test.key + " 运行期类型 "
+            Log.w(TAG, "EX-02 coerce fallback: " + test.key + " 运行期类型 "
                     + original.getClass().getName() + " 不在支持范围");
             return original;
         }
@@ -243,7 +243,7 @@ public final class AbTestHooks {
                 test = guessType(key, value);
             }
             if (test != null && sLogged.add(key)) {
-                Log.i(TAG, "P2-1 override " + key + "=" + value
+                Log.i(TAG, "EX-02 override " + key + "=" + value
                         + " type=" + test.valueType);
             }
             return test;
@@ -311,7 +311,7 @@ public final class AbTestHooks {
                         String raw = b.getString(AbReportProvider.KEY_OVERRIDES, "");
                         if (!raw.equals(sLastRaw)) {
                             sLastRaw = raw;
-                            Log.i(TAG, "P2-1 provider pull enabled=" + enabled + " raw=" + raw);
+                            Log.i(TAG, "EX-02 provider pull enabled=" + enabled + " raw=" + raw);
                         }
                         Map<String, String> next = enabled
                                 ? parse(raw)
@@ -321,7 +321,7 @@ public final class AbTestHooks {
                     }
                 } catch (Throwable t) {
                     if (sPullErrors++ < 3) {
-                        Log.w(TAG, "P2-1 provider pull failed", t);
+                        Log.w(TAG, "EX-02 provider pull failed", t);
                     }
                     // 落到下面的启动快照。
                 }
@@ -351,7 +351,7 @@ public final class AbTestHooks {
                 sSentValues.clear();
             }
             if (!next.equals(prev)) {
-                Log.i(TAG, "P2-1 overrides loaded: " + next);
+                Log.i(TAG, "EX-02 overrides loaded: " + next);
             }
         }
 

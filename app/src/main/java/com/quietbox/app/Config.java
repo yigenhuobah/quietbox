@@ -4,6 +4,7 @@ import android.content.SharedPreferences;
 import android.util.Log;
 
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -12,18 +13,18 @@ import io.github.libxposed.api.XposedModule;
 
 /**
  * 开关读取：有 PROP_CAP_REMOTE 才读 getRemotePreferences("config")，
- * 否则（含读取抛异常）回退到 Feature 的编译期内置默认值。
+ * 否则（含能力探测/读取任一步抛异常）回退到 Feature 的编译期内置默认值。
  * 必须在 onModuleLoaded 之后调用，之前任何 API 都会抛 IllegalStateException。
  */
 public final class Config {
 
     public static final String GROUP = "config";
 
-    /** P1-9 子选项：默认只删纯追踪参数，xsec_token 可能影响链接可打开性。 */
+    /** PV-03 子选项：默认只删纯追踪参数，xsec_token 可能影响链接可打开性。 */
     public static final String KEY_STRIP_XSEC_TOKEN = "p1_9_strip_xsec_token";
     public static final boolean DEFAULT_STRIP_XSEC_TOKEN = false;
 
-    /** AB 覆盖表：每行 key=value，由「测试」页写入，目标进程每 3 秒重读。 */
+    /** AB 覆盖表：每行 key=value，由「实验」页写入，目标进程每 3 秒重读。 */
     public static final String KEY_AB_OVERRIDES = "ab_overrides";
 
     private static final String TAG = "QuietBox";
@@ -38,24 +39,76 @@ public final class Config {
         }
     }
 
-    public static Config load(XposedModule module) {
+    /** 纯 JVM 可测入口：overrides 里缺的键用 Feature 编译期默认值，未知键忽略。 */
+    static Config fromOverrides(Map<String, Boolean> overrides) {
         Config config = new Config();
-        boolean remote = (module.getFrameworkProperties() & XposedInterface.PROP_CAP_REMOTE) != 0;
+        if (overrides != null) {
+            for (Feature f : Feature.values()) {
+                Boolean v = overrides.get(f.key);
+                if (v != null) {
+                    config.mEnabled.put(f, v);
+                }
+            }
+        }
+        return config;
+    }
+
+    /**
+     * remote 开关读取器。读取失败（含返回 null）由
+     * {@link #load(boolean, RemoteReader)} 统一吞掉并回退默认值。
+     */
+    @FunctionalInterface
+    interface RemoteReader {
+        Map<String, Boolean> read() throws Throwable;
+    }
+
+    /**
+     * 纯 JVM 可测入口：remote=false 或读取失败时全默认；读取成功时缺键用默认值。
+     * 任何异常都不向外抛，避免一次 remote 读取失败让全部 hook 不安装。
+     */
+    static Config load(boolean remote, RemoteReader reader) {
+        if (!remote) {
+            return new Config();
+        }
+        Map<String, Boolean> overrides;
+        try {
+            overrides = reader == null ? null : reader.read();
+        } catch (Throwable t) {
+            return new Config();
+        }
+        return fromOverrides(overrides);
+    }
+
+    public static Config load(XposedModule module) {
+        boolean remote;
+        try {
+            remote = (module.getFrameworkProperties() & XposedInterface.PROP_CAP_REMOTE) != 0;
+        } catch (Throwable t) {
+            module.log(Log.WARN, TAG, "framework properties unavailable: use built-in defaults", t);
+            return new Config();
+        }
         if (!remote) {
             module.log(Log.WARN, TAG, "no PROP_CAP_REMOTE: use built-in defaults");
-            return config;
+            return new Config();
         }
         try {
             SharedPreferences sp = module.getRemotePreferences(GROUP);
-            for (Feature f : Feature.values()) {
-                config.mEnabled.put(f, sp.getBoolean(f.key, f.defaultEnabled));
+            if (sp == null) {
+                throw new IllegalStateException("remote prefs is null");
             }
-            config.mStripXsecToken = sp.getBoolean(KEY_STRIP_XSEC_TOKEN, DEFAULT_STRIP_XSEC_TOKEN);
+            Map<String, Boolean> overrides = new HashMap<>();
+            for (Feature f : Feature.values()) {
+                overrides.put(f.key, sp.getBoolean(f.key, f.defaultEnabled));
+            }
+            Config config = fromOverrides(overrides);
+            config.mStripXsecToken =
+                    sp.getBoolean(KEY_STRIP_XSEC_TOKEN, DEFAULT_STRIP_XSEC_TOKEN);
             parseOverrides(sp.getString(KEY_AB_OVERRIDES, ""), config.mAbOverrides);
+            return config;
         } catch (Throwable t) {
             module.log(Log.WARN, TAG, "remote prefs unavailable: use built-in defaults", t);
+            return new Config();
         }
-        return config;
     }
 
     public boolean enabled(Feature f) {

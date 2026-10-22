@@ -15,9 +15,9 @@ import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * P1-21/22/23 信息流直播卡、带货卡、投票卡过滤。
+ * AD-08/09/10 信息流直播卡、带货卡、投票卡过滤。
  *
- * 复用 P0-2 已验证的列表过滤链路（r7d/m0#Q、#A0、m7d/s#Yd，见 FeedAdHooks），
+ * 复用 AD-02 已验证的列表过滤链路（r7d/m0#Q、#A0、m7d/s#Yd，见 FeedAdHooks），
  * 只动列表内容、不动游标，分页不受影响。三个功能各挂各的谓词，互不依赖。
  *
  * 判定优先用 NoteItemBean.modelType 字符串：modelType 非空时只按类型判定；
@@ -182,7 +182,7 @@ final class FeedCardHooks {
                 return;
             }
         }
-        android.util.Log.i("QuietBox", "P1-21/22/23 modelType=" + mt);
+        android.util.Log.i("QuietBox", "AD-08/09/10 modelType=" + mt);
     }
 
     private static String modelType(Object note) {

@@ -11,12 +11,12 @@ import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * P1-16 评分引导双弹窗屏蔽。
+ * UI-01 评分引导双弹窗屏蔽。
  *
  * 评分引导有两个独立入口，任一个漏掉都会弹：
  * 1) 应用内「满意吗 / 去评分」弹窗：AppScoreDialogActivity，走 onCreate，
  *    不能跳过（super.onCreate 只在静态 de() 内被调用一次，跳过会抛
- *    SuperNotCalledException），与 P0-4 同构：finish() 后照常 proceed。
+ *    SuperNotCalledException），与 UI-04 同构：finish() 后照常 proceed。
  * 2) Google Play 系统评分：ShareApplication#tryLaunchGpReview，普通 void，直接 skip。
  */
 final class ScoreGuideHooks {

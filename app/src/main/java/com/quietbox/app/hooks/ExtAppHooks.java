@@ -16,7 +16,7 @@ import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * P1-7 广告外跳拦截。
+ * AD-04 广告外跳拦截。
  *
  * 链路（2026-10-16 DexSQL 复核，报告 E:\tmp-xhs-mod\agy-scratch\verify_p1_7.md）：
  *   广告落地页 WebView（ExternalWebViewActivityV2）触发三方 scheme

@@ -11,7 +11,7 @@ import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * P0-4 更新弹窗屏蔽。
+ * UI-04 更新弹窗屏蔽。
  * onCreate 不能跳过：super.onCreate 只在静态 de() 内被调用一次，
  * 跳过会让 Activity.mCalled 校验抛 SuperNotCalledException。
  * 因此 onCreate 只 finish() 后照常 proceed；he() 是普通 void，可安全跳过。

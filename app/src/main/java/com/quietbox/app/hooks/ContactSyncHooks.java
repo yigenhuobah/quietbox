@@ -7,7 +7,7 @@ import java.lang.reflect.Method;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * P1-19 通讯录同步上传关闭。
+ * PV-02 通讯录同步上传关闭。
  *
  * 通讯录上传是可选功能，不上传就不会有通讯录推荐/好友发现。三个入口都是 void，直接 skip。
  * 不碰登录与安全链路。

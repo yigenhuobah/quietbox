@@ -20,7 +20,7 @@ import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * P1-9 复制链接净化。
+ * PV-03 复制链接净化。
  *
  * 2026-10-16 DexSQL 复核（报告 E:\tmp-xhs-mod\agy-scratch\verify_p1_9.md）：
  * 旧实现挂在混淆类 e2c.i 上（跨版本会被 R8 重命名，脆弱），且只覆盖 note 详情页。

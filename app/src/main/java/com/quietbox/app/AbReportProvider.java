@@ -33,7 +33,7 @@ public final class AbReportProvider extends ContentProvider {
     public static final String KEY_MOUNT_FEATURES = "mount_features";
     public static final String KEY_MOUNT_BAD = "mount_bad";
     public static final String KEY_MOUNT_TIME = "mount_time";
-    /** mount_miss 的明细，格式 "P0-1,P1-13"，供 logcat/排障对应。 */
+    /** mount_miss 的明细，格式 "AD-01,AD-05"，供 logcat/排障对应。 */
     public static final String KEY_MOUNT_DETAIL = "mount_detail";
 
     private static final int MAX_KEY = 128;

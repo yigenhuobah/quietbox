@@ -11,7 +11,7 @@ import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * P1-15 已删除/不可见笔记仍按本地缓存展示。
+ * EX-01 已删除/不可见笔记仍按本地缓存展示。
  *
  * 现象：笔记在信息流里还能看到（封面、标题、图片都在本地），点进去却立刻变成
  * 「当前内容无法展示」。断网时反而能正常浏览 —— 说明详情页在请求失败时会保留

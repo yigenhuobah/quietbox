@@ -15,7 +15,7 @@ import java.lang.reflect.Method;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * P0-1 开屏广告跳过。
+ * AD-01 开屏广告跳过。
  *
  * 开屏广告有两条互不覆盖的展示路径（2026-10-16 DexSQL 复核，报告
  * E:\tmp-xhs-mod\agy-scratch\splash_ad_path.md）：

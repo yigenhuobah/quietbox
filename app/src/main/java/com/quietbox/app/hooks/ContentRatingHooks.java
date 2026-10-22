@@ -7,7 +7,7 @@ import java.lang.reflect.Method;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * P1-18 内容评价 Snackbar 屏蔽。
+ * UI-03 内容评价 Snackbar 屏蔽。
  *
  * 详情页底部「对当前的内容满意吗？」调研条。主挂 shouldShowInternal（return false），
  * 一处管全部；showForVideo / showForImageText 两个分场景入口作为兜底 skip，

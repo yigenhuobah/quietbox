@@ -43,8 +43,7 @@ final class HookKit {
             return Class.forName(name, false, cl);
         } catch (Throwable t) {
             warn(module, f.id + " skip: class not found " + name);
-            HookState.markNotFound(f);
-            HookState.note(f, "类未找到 " + name);
+            HookState.markNotFound(f, "类未找到 " + name);
             return null;
         }
     }
@@ -56,8 +55,7 @@ final class HookKit {
         if (m == null) {
             warn(module, f.id + " skip: method not found "
                     + (cls == null ? "?" : cls.getName()) + "#" + name);
-            HookState.markNotFound(f);
-            HookState.note(f, "方法未找到 " + name);
+            HookState.markNotFound(f, "方法未找到 " + name);
         }
         return m;
     }
@@ -72,8 +70,7 @@ final class HookKit {
         if (m == null) {
             warn(module, f.id + " skip: method not found "
                     + (cls == null ? "?" : cls.getName()) + "#" + name);
-            HookState.markNotFound(f);
-            HookState.note(f, "方法未找到 " + name);
+            HookState.markNotFound(f, "方法未找到 " + name);
         }
         return m;
     }
@@ -188,8 +185,7 @@ final class HookKit {
         if (m == null) {
             warn(module, f.id + " skip: method not found "
                     + (cls == null ? "?" : cls.getName()) + "#" + name + "/" + arity + " 未找到");
-            HookState.markNotFound(f);
-            HookState.note(f, "方法未找到 " + name);
+            HookState.markNotFound(f, "方法未找到 " + name);
         }
         return m;
     }
@@ -202,8 +198,7 @@ final class HookKit {
         if (m == null) {
             warn(module, f.id + " skip: method not found "
                     + (cls == null ? "?" : cls.getName()) + "#" + name + " 未找到");
-            HookState.markNotFound(f);
-            HookState.note(f, "方法未找到 " + name);
+            HookState.markNotFound(f, "方法未找到 " + name);
         }
         return m;
     }
@@ -216,8 +211,7 @@ final class HookKit {
         if (m == null) {
             warn(module, f.id + " skip: method not found "
                     + (cls == null ? "?" : cls.getName()) + "#" + name + " 未找到");
-            HookState.markNotFound(f);
-            HookState.note(f, "方法未找到 " + name);
+            HookState.markNotFound(f, "方法未找到 " + name);
         }
         return m;
     }
@@ -239,8 +233,7 @@ final class HookKit {
         }
         warn(module, f.id + " skip: method not found "
                 + (cls == null ? "?" : cls.getName()) + "#" + name + " 未找到");
-        HookState.markNotFound(f);
-        HookState.note(f, "方法未找到 " + name);
+        HookState.markNotFound(f, "方法未找到 " + name);
         return null;
     }
 
@@ -248,6 +241,7 @@ final class HookKit {
                            XposedInterface.Hooker hooker) {
         if (m == null) {
             warn(module, f.id + " skip: no executable for " + label);
+            HookState.markNotFound(f, "挂载点为空 " + label);
             return false;
         }
         return install(module, f, label, (java.lang.reflect.Executable) m, hooker);
@@ -259,6 +253,7 @@ final class HookKit {
                            XposedInterface.Hooker hooker) {
         if (m == null) {
             warn(module, f.id + " skip: no executable for " + label);
+            HookState.markNotFound(f, "挂载点为空 " + label);
             return false;
         }
         try {
@@ -271,13 +266,13 @@ final class HookKit {
             return true;
         } catch (Throwable t) {
             error(module, f.id + " hook failed " + label, t);
-            HookState.markNotFound(f);
-            HookState.note(f, "hook 失败 " + label);
+            HookState.markNotFound(f, "hook 失败 " + label);
             return false;
         }
     }
 
     static void hit(XposedModule module, Feature f, String detail) {
+        HookState.hit(f);
         module.log(Log.INFO, TAG, f.id + " hit " + detail);
     }
 

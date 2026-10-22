@@ -4,6 +4,7 @@
     高度按 M3 两行列表规范 72dp，左右内边距 16dp，图标 24dp。
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:minHeight="72dp"
@@ -19,7 +20,7 @@
         android:layout_height="24dp"
         android:importantForAccessibility="no"
         android:scaleType="fitCenter"
-        android:tint="?attr/colorOnSurfaceVariant" />
+        app:tint="?attr/colorOnSurfaceVariant" />
 
     <LinearLayout
         android:layout_width="0dp"

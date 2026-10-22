@@ -11,7 +11,7 @@ import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * P1-14 详情页广告条屏蔽。
+ * AD-06 详情页广告条屏蔽。
  *
  * 笔记详情页底部的「二跳条」由 AdvertV2View（继承抽象类 p.a，即 FrameLayout）承载。
  * 构造时它会 lazy 出一个真实广告 view 并 addView；广告数据通过
