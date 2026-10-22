@@ -65,7 +65,7 @@ bash tools/check-mounts.sh <新版apk>
 
 ```bash
 # 改 app/build.gradle 的 versionCode / versionName
-cd /d/quietbox
+cd /d/modules/QuietBox/project
 ./gradlew assembleDebug assembleRelease
 ```
 
@@ -99,9 +99,9 @@ gh release create v0.2.3 build/outputs/apk/release/quietbox-0.2.3.apk \
 官方仓库由机器人创建，本地克隆一份长期保留：
 
 ```bash
-cd /e/tmp-xhs-mod/official-repo
+cd /d/modules/QuietBox/research/official-repo
 # 换入新 APK；SUMMARY 和 README.md 同步主仓库的用户说明
-cp /d/quietbox/app/build/outputs/apk/release/quietbox-0.2.3.apk .
+cp /d/modules/QuietBox/project/app/build/outputs/apk/release/quietbox-0.2.3.apk .
 git add -A && git commit -m "0.2.3"
 git tag 5-0.2.3 && git push origin main --tags
 gh release create 5-0.2.3 quietbox-0.2.3.apk --title "0.2.3" --notes "<更新说明>"

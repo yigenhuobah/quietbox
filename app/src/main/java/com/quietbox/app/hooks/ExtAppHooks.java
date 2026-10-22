@@ -7,6 +7,10 @@ import com.quietbox.app.Feature;
 import com.quietbox.app.HookState;
 
 import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
 
 import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
@@ -91,16 +95,20 @@ final class ExtAppHooks {
         return false;
     }
 
-    /** 非 http(s)/file 的 scheme 视为"拉起外部 App"，如 taobao:// openapp.jdmobile:// snssdk1128://。 */
+    /**
+     * 放行的站内 / 系统 scheme 白名单：http(s) 等常规 WebView 导航，file/about/javascript/data/blob
+     * 等内嵌内容，以及站内路由（xhsdiscover/xhsapp/xhs）和 content。只有白名单外的 scheme
+     * （taobao:// openapp.jdmobile:// snssdk1128:// 等）才视为"拉起外部 App"。
+     * 用白名单而不是黑名单，避免漏掉未列举的站内 scheme 被误拦。
+     */
+    private static final Set<String> ALLOWED_SCHEMES = new HashSet<>(Arrays.asList(
+            "http", "https", "file", "about", "javascript", "data", "blob",
+            "xhsdiscover", "xhsapp", "xhs", "content"));
+
     private static boolean isAppScheme(String scheme) {
         if (scheme == null || scheme.isEmpty()) {
             return false;
         }
-        return !"http".equalsIgnoreCase(scheme)
-                && !"https".equalsIgnoreCase(scheme)
-                && !"file".equalsIgnoreCase(scheme)
-                && !"about".equalsIgnoreCase(scheme)
-                && !"javascript".equalsIgnoreCase(scheme)
-                && !"data".equalsIgnoreCase(scheme);
+        return !ALLOWED_SCHEMES.contains(scheme.toLowerCase(Locale.ROOT));
     }
 }

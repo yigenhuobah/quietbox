@@ -7,6 +7,8 @@ import com.quietbox.app.Config;
 import com.quietbox.app.Feature;
 import com.quietbox.app.HookState;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import io.github.libxposed.api.XposedModule;
 
 /**
@@ -16,6 +18,9 @@ import io.github.libxposed.api.XposedModule;
 public final class Hooks {
 
     private static final String TAG = "QuietBox";
+
+    private static volatile boolean sMountPushed;
+    private static final AtomicBoolean sMountSending = new AtomicBoolean();
 
     private Hooks() {
     }
@@ -30,6 +35,8 @@ public final class Hooks {
         }
         if (!config.anyEnabled()) {
             module.log(Log.INFO, TAG, "all features disabled, nothing to hook");
+            // 全关时也要推一次 0/0，清掉上一次运行留下的不兼容告警。
+            pushMountReport(module, cl);
             return;
         }
         for (Feature f : Feature.values()) {
@@ -52,7 +59,7 @@ public final class Hooks {
      * installAll 结束时统计 ok/miss，挂 Application#onCreate 拿 Context 后
      * 一次性推给模块 App，由它判断是否显示不兼容横幅。
      *
-     * 这里不再判断 anyEnabled：走到这里说明至少有一个功能开着，统计才有意义。
+     * 全关时也会走到这里（推 0/0 清旧告警），因此不能假设至少有一个功能开着。
      */
     private static void pushMountReport(XposedModule module, ClassLoader cl) {
         try {
@@ -68,14 +75,28 @@ public final class Hooks {
                     .intercept(chain -> {
                         try {
                             Object self = chain.getThisObject();
-                            if (self instanceof android.content.Context && !sMountPushed) {
-                                sMountPushed = true;
-                                HookState.Snapshot snap = HookState.drain();
-                                if (snap.ok + snap.miss > 0) {
-                                    sendMount((android.content.Context) self, snap);
-                                }
+                            if (self instanceof android.content.Context
+                                    && !sMountPushed
+                                    && sMountSending.compareAndSet(false, true)) {
+                                final android.content.Context ctx = (android.content.Context) self;
+                                final HookState.Snapshot snap = HookState.snapshot();
+                                new Thread(() -> {
+                                    boolean sent = sendMount(ctx, snap);
+                                    android.util.Log.i(TAG, "mount report sent=" + sent
+                                            + " ok=" + snap.ok + " miss=" + snap.miss
+                                            + " bad=" + snap.bad + " features=" + snap.features);
+                                    if (sent) {
+                                        HookState.clear();
+                                    }
+                                    // 每进程只尝试一次：Application#onCreate 可能被多个
+                                    // Application 实例重复触发，失败重试只会刷日志，
+                                    // 进程内也没有更好的重试时机。
+                                    sMountPushed = true;
+                                    sMountSending.set(false);
+                                }, "QuietBox-mount").start();
                             }
                         } catch (Throwable t) {
+                            sMountSending.set(false);
                             HookKit.warn(module, "mount report skipped: " + t);
                         }
                         return chain.proceed();
@@ -85,20 +106,22 @@ public final class Hooks {
         }
     }
 
-    private static volatile boolean sMountPushed;
-
-    private static void sendMount(android.content.Context ctx, HookState.Snapshot snap) {
+    private static boolean sendMount(android.content.Context ctx, HookState.Snapshot snap) {
         try {
             android.os.Bundle extras = new android.os.Bundle();
             extras.putInt(AbReportProvider.KEY_MOUNT_OK, snap.ok);
             extras.putInt(AbReportProvider.KEY_MOUNT_MISS, snap.miss);
+            extras.putInt(AbReportProvider.KEY_MOUNT_FEATURES, snap.features);
+            extras.putInt(AbReportProvider.KEY_MOUNT_BAD, snap.bad);
             extras.putString(AbReportProvider.KEY_MOUNT_DETAIL,
                     android.text.TextUtils.join(",", snap.missed));
-            ctx.getContentResolver().call(
+            Object result = ctx.getContentResolver().call(
                     android.net.Uri.parse("content://" + AbReportProvider.AUTHORITY),
                     "mount", null, extras);
+            return result != null;
         } catch (Throwable t) {
             Log.w(TAG, "mount report send failed: " + t);
+            return false;
         }
     }
 
@@ -169,6 +192,7 @@ public final class Hooks {
             }
         } catch (Throwable t) {
             module.log(Log.ERROR, TAG, f.id + " install threw", t);
+            HookState.markNotFound(f);
             HookState.note(f, "安装异常");
         }
     }

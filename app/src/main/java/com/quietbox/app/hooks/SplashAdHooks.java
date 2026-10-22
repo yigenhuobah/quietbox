@@ -45,7 +45,6 @@ final class SplashAdHooks {
             "openLCBBrandMaxSplashAds",    // 品牌 Max
             "openBrandMax",
             "openNeedLazyHFSplashAds",     // 懒加载 HF 开屏（Dynamic/CNY/Stellar 分支）
-            "startAnim",                   // 揭示动画；fragment 已挂载，仅作补充
     };
 
     /** 类型 / UI 变体判定，不是展示总闸，置 false 只是辅助。 */

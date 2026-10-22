@@ -56,23 +56,31 @@ public final class AbTest {
         return new AbTest(key, GROUP_MISC, 0, 0, forceValue, type);
     }
 
-    /** 该读点强开的目标原语值：BOOL → Boolean，INT → Integer。 */
+    /** 该读点强开的目标原语值：BOOL → Boolean，INT → Integer。解析不出来返回 null。 */
     public Object targetPrimitive() {
-        return valueType == ValueType.BOOL
-                ? Boolean.valueOf(!"false".equals(forceValue))
-                : parseIntOrNull(forceValue);
+        if (valueType == ValueType.BOOL) {
+            // 只认 "true"/"false"：其他字面量宁可回落到原值，也不能猜成 true。
+            if ("true".equalsIgnoreCase(forceValue)) {
+                return Boolean.TRUE;
+            }
+            if ("false".equalsIgnoreCase(forceValue)) {
+                return Boolean.FALSE;
+            }
+            return null;
+        }
+        return parseIntOrNull(forceValue);
     }
 
     /** stringHook 路径上喂给 eb6.o#l 的字符串，按类型规整成 Gson 可解析的形式。 */
     public String forcedLiteral() {
         Object target = targetPrimitive();
-        if (target instanceof Boolean) {
-            return String.valueOf(target);
-        }
-        return target == null ? "1" : String.valueOf(target);
+        return target == null ? null : String.valueOf(target);
     }
 
     private static Integer parseIntOrNull(String raw) {
+        if (raw == null) {
+            return null;
+        }
         try {
             return Integer.valueOf(raw);
         } catch (NumberFormatException e) {

@@ -149,7 +149,7 @@ final class WatermarkHooks {
         }
     }
 
-    /** nd8.i.g 的第一参是XhsActivity（继承 android.app.Activity），用父类形状定位。 */
+    /** nd8.i.g 的第一参在 9.50.0 经 DEX 复核就是 android.app.Activity（不是 XhsActivity），用 Activity 做形状匹配。 */
     @Nullable
     private static Class<?> mainActivityClass(ClassLoader cl) {
         try {

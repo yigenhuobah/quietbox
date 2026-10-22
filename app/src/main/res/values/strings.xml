@@ -16,7 +16,7 @@
     <string name="status_detail_not_running">启动小红书后生效。若已启动仍显示此状态，请检查模块是否已在 LSPosed 中启用</string>
     <string name="status_detail_inactive">请在 LSPosed 中启用本模块并勾选小红书</string>
     <string name="status_detail_connecting">绑定成功后自动刷新</string>
-    <string name="mount_warning">当前小红书版本可能不兼容：%1$d/%2$d 个挂载点失效。请先确认小红书版本是 9.50.0，再查看 logcat（tag QuietBox）确认失效的功能；升级小红书后需要重新适配。</string>
+    <string name="mount_warning">当前小红书版本可能不兼容：%1$d/%2$d 个功能有挂载点失效。请先确认小红书版本是 9.50.0，再查看 logcat（tag QuietBox）确认失效的功能；升级小红书后需要重新适配。</string>
     <!-- 底栏 -->
     <string name="nav_features">功能</string>
     <string name="nav_ab">测试</string>
@@ -107,7 +107,7 @@
 
     <!-- 页脚 -->
     <string name="footer_limits">已知限制：默认静音（小红书自带）、摇一摇拦截（检测在原生层）、埋点抑制（本版本无安全挂载点）在本版本不可用。</string>
-    <string name="footer_hint">修改后立即生效，无需重启小红书。若某项无效，请确认 LSPosed 作用域已勾选 com.xingin.xhs。</string>
+    <string name="footer_hint">修改后需重启小红书生效（AB 面板的单项实验约 3 秒生效）。若某项无效，请确认 LSPosed 作用域已勾选 com.xingin.xhs。</string>
 
     <!-- 功能标题与说明 -->
     <string name="f_p0_1_title">开屏广告跳过</string>
@@ -132,8 +132,8 @@
     <string name="f_p1_10_summary">本版本不可用：无安全的挂载点</string>
     <string name="f_p1_11_title">水印策略</string>
     <string name="f_p1_11_summary">保存图片时不带水印</string>
-    <string name="f_p1_12_title">自动播放与画质偏好</string>
-    <string name="f_p1_12_summary">关闭自动播放，默认最高画质</string>
+    <string name="f_p1_12_title">自动播放</string>
+    <string name="f_p1_12_summary">详情页/视频 tab 不自动播放（画质偏好本版本不提供）</string>
     <string name="f_p1_13_title">搜索广告过滤</string>
     <string name="f_p1_13_summary">搜索结果里不显示广告</string>
     <string name="f_p1_14_title">详情页广告条屏蔽</string>

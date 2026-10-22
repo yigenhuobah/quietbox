@@ -6,6 +6,7 @@ import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
+import android.util.Log;
 
 /**
  * 目标进程（小红书）→ 模块 App 的探测数据通道。
@@ -28,6 +29,9 @@ public final class AbReportProvider extends ContentProvider {
     /** 挂载自检：目标进程启动时推送一次统计，供模块 App 判断版本兼容性。 */
     public static final String KEY_MOUNT_OK = "mount_ok";
     public static final String KEY_MOUNT_MISS = "mount_miss";
+    /** 本次启用的功能数 / miss > 0 的功能数，用于横幅按「坏掉的功能占比」判断。 */
+    public static final String KEY_MOUNT_FEATURES = "mount_features";
+    public static final String KEY_MOUNT_BAD = "mount_bad";
     public static final String KEY_MOUNT_TIME = "mount_time";
     /** mount_miss 的明细，格式 "P0-1,P1-13"，供 logcat/排障对应。 */
     public static final String KEY_MOUNT_DETAIL = "mount_detail";
@@ -43,6 +47,10 @@ public final class AbReportProvider extends ContentProvider {
 
     @Override
     public Bundle call(String method, String arg, Bundle extras) {
+        if (!trustedCaller()) {
+            Log.w("QuietBox", "ab provider rejected caller uid=" + android.os.Binder.getCallingUid());
+            return null;
+        }
         if (getContext() == null) {
             return null;
         }
@@ -51,6 +59,8 @@ public final class AbReportProvider extends ContentProvider {
             Bundle out = new Bundle();
             out.putBoolean(KEY_PANEL_ENABLED, sp.getBoolean(KEY_PANEL_ENABLED, false));
             out.putString(KEY_OVERRIDES, sp.getString(KEY_OVERRIDES, ""));
+            out.putInt(KEY_MOUNT_FEATURES, sp.getInt(KEY_MOUNT_FEATURES, 0));
+            out.putInt(KEY_MOUNT_BAD, sp.getInt(KEY_MOUNT_BAD, 0));
             return out;
         }
         if ("mount".equals(method)) {
@@ -61,6 +71,8 @@ public final class AbReportProvider extends ContentProvider {
             sp.edit()
                     .putInt(KEY_MOUNT_OK, extras.getInt(KEY_MOUNT_OK, 0))
                     .putInt(KEY_MOUNT_MISS, extras.getInt(KEY_MOUNT_MISS, 0))
+                    .putInt(KEY_MOUNT_FEATURES, extras.getInt(KEY_MOUNT_FEATURES, 0))
+                    .putInt(KEY_MOUNT_BAD, extras.getInt(KEY_MOUNT_BAD, 0))
                     .putString(KEY_MOUNT_DETAIL, extras.getString(KEY_MOUNT_DETAIL, ""))
                     .putLong(KEY_MOUNT_TIME, System.currentTimeMillis())
                     .apply();
@@ -80,7 +92,8 @@ public final class AbReportProvider extends ContentProvider {
         for (int i = 0; i < keys.length && accepted < MAX_ITEMS; i++) {
             String key = keys[i];
             String value = values[i];
-            if (!validKey(key) || value == null || value.length() > MAX_VALUE) {
+            if (!validKey(key) || value == null || value.length() > MAX_VALUE
+                    || !validValue(value)) {
                 continue;
             }
             editor.putString("v:" + key, value);
@@ -106,6 +119,36 @@ public final class AbReportProvider extends ContentProvider {
             }
         }
         return true;
+    }
+
+    /** 值里不允许出现控制字符（换行、NUL 等）。 */
+    private static boolean validValue(String value) {
+        for (int i = 0; i < value.length(); i++) {
+            if (value.charAt(i) < 0x20) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** 只接受模块自身与目标 App（同一 uid 的包也算）。 */
+    private boolean trustedCaller() {
+        int uid = android.os.Binder.getCallingUid();
+        if (uid == android.os.Process.myUid()) {
+            return true;
+        }
+        if (getContext() == null) {
+            return false;
+        }
+        String[] pkgs = getContext().getPackageManager().getPackagesForUid(uid);
+        if (pkgs != null) {
+            for (String p : pkgs) {
+                if ("com.xingin.xhs".equals(p)) {
+                    return true;
+                }
+            }
+        }
+        return "com.xingin.xhs".equals(getCallingPackage());
     }
 
     @Override

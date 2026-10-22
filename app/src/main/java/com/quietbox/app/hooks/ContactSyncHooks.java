@@ -31,6 +31,10 @@ final class ContactSyncHooks {
                     HookKit.findMethod(module, f, cls, "requestContactsSync",
                             android.content.Context.class, String.class),
                     HookKit.skipVoid(module, f, "requestContactsSync"));
+            // DEX 已确认的同名 3 参重载：requestContactsSync(Context, String, z2.b)。
+            HookKit.install(module, f, "requestContactsSync#3",
+                    HookKit.findByNameAndArity(module, f, cls, "requestContactsSync", 3),
+                    HookKit.skipVoid(module, f, "requestContactsSync#3"));
             HookKit.install(module, f, "installLifecycleObserver",
                     HookKit.findMethod(module, f, cls, "installLifecycleObserver",
                             android.app.Application.class),

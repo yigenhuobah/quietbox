@@ -1,6 +1,7 @@
 package com.quietbox.app.hooks;
 
 import android.content.ClipData;
+import android.content.ClipDescription;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.net.Uri;
@@ -58,6 +59,9 @@ final class CopyLinkHooks {
 
     private static void seen(XposedModule module, Feature f, String detail) {
         synchronized (SEEN) {
+            if (SEEN.size() > 256) {
+                SEEN.clear();
+            }
             if (!SEEN.add(detail)) {
                 return;
             }
@@ -78,7 +82,7 @@ final class CopyLinkHooks {
 
             // 副挂/兜底：所有"复制链接"的 String 收口。主挂是混淆类，被 R8 重命名时靠它兜底。
             Class<?> funnel = HookKit.findClass(module, f, cl, COPY_FUNNEL);
-            Method a = HookKit.findMethodQuiet(funnel, "a",
+            Method a = HookKit.findMethodQuiet(module, f, funnel, "a",
                     Context.class, CharSequence.class, CharSequence.class);
             HookKit.install(module, f, "j92.q#a", a, funnelHook(module, f, stripXsecToken));
 
@@ -116,7 +120,7 @@ final class CopyLinkHooks {
         }
         CharSequence label = clip.getDescription() == null ? null : clip.getDescription().getLabel();
         CharSequence text = clip.getItemAt(0).getText();
-        seen(module, f, "clip label=" + label + " text=" + brief(text));
+        seen(module, f, "clip label=" + label);
         if (!(text instanceof String)) {
             return null;
         }
@@ -126,7 +130,13 @@ final class CopyLinkHooks {
             return null;
         }
         HookKit.hit(module, f, "ClipboardProxyImpl removed=" + removedKeys(raw, stripToken));
-        return ClipData.newPlainText(label, clean);
+            ClipData out = ClipData.newPlainText(label, clean);
+            ClipDescription src = clip.getDescription();
+            if (src != null && src.getExtras() != null) {
+                out.getDescription().setExtras(
+                        new android.os.PersistableBundle(src.getExtras()));
+            }
+            return out;
     }
 
     /** 副挂：j92/q.a(Context, label, text)，只对 label == "ug-share-copy-link" 的复制链接生效。 */
@@ -138,7 +148,7 @@ final class CopyLinkHooks {
                 if (args.size() >= 3) {
                     Object label = args.get(1);
                     Object text = args.get(2);
-                    seen(module, f, "j92.q.a label=" + label + " text=" + brief(text));
+                    seen(module, f, "j92.q.a label=" + label);
                     if (label instanceof CharSequence && text instanceof String
                             && label.toString().contains(COPY_LABEL)) {
                         String raw = (String) text;
@@ -162,55 +172,43 @@ final class CopyLinkHooks {
             return url;
         }
         try {
-            Uri parsed = Uri.parse(url);
-            if (parsed.getQuery() == null) {
+            // 直接在原始串上切分，不经 Uri.getQuery()：后者返回解码后的串，
+            // 再拿它去 url.indexOf 会在保留参数含 %XX / + 时定位错位。
+            int hash = url.indexOf('#');
+            String head = hash < 0 ? url : url.substring(0, hash);
+            String frag = hash < 0 ? "" : url.substring(hash);
+            int q = head.indexOf('?');
+            if (q < 0) {
                 return url;
             }
-            Set<String> names = parsed.getQueryParameterNames();
-            boolean hit = false;
-            for (String name : names) {
-                if (isTracking(dec(name), stripXsecToken)) {
-                    hit = true;
-                    break;
-                }
-            }
-            if (!hit) {
+            String rawQuery = head.substring(q + 1);
+            if (rawQuery.isEmpty()) {
                 return url;
             }
-            // 用「删除整个查询串字符串」而不是 Builder.appendQueryParameter：
-            // appendQueryParameter 会重新编码保留参数，%XX 变成 %25XX、+ 变 %2B，把链接改坏。
-            // 这里按原查询串分段保留未删的片段，编码原样不动。
-            String removed = dropTracking(parsed, stripXsecToken);
-            if (removed == null) {
+            String kept = dropTracking(rawQuery, stripXsecToken);
+            if (kept == null) {
                 return url;
             }
-            String q = parsed.getQuery();
-            int idx = url.indexOf(q);
-            if (idx < 0) {
-                return url;
-            }
-            return url.substring(0, idx) + removed
-                    + url.substring(idx + q.length());
+            String base = head.substring(0, q);
+            return (kept.isEmpty() ? base : base + "?" + kept) + frag;
         } catch (Throwable t) {
             return url;
         }
     }
 
-    /** 保留非追踪参数的 query 片段（原编码不动）；没有可保留片段时返回空串。 */
+    /** 保留非追踪参数的 query 片段（原编码不动）；没有命中任何追踪参数时返回 null。 */
     @Nullable
-    private static String dropTracking(Uri parsed, boolean stripXsecToken) {
-        String q = parsed.getQuery();
-        if (q == null) {
-            return "";
-        }
+    private static String dropTracking(String rawQuery, boolean stripXsecToken) {
         StringBuilder sb = new StringBuilder();
-        for (String pair : q.split("&")) {
+        boolean removed = false;
+        for (String pair : rawQuery.split("&", -1)) {
             if (pair.isEmpty()) {
                 continue;
             }
             int eq = pair.indexOf('=');
             String name = eq < 0 ? pair : pair.substring(0, eq);
             if (isTracking(dec(name), stripXsecToken)) {
+                removed = true;
                 continue;
             }
             if (sb.length() > 0) {
@@ -218,7 +216,7 @@ final class CopyLinkHooks {
             }
             sb.append(pair);
         }
-        return sb.toString();
+        return removed ? sb.toString() : null;
     }
 
     private static String dec(String s) {
@@ -230,13 +228,23 @@ final class CopyLinkHooks {
     }
 
     private static String removedKeys(String url, boolean stripXsecToken) {
+        if (url == null) {
+            return "";
+        }
         try {
-            Uri parsed = Uri.parse(url);
-            if (parsed.getQuery() == null) {
+            int hash = url.indexOf('#');
+            String head = hash < 0 ? url : url.substring(0, hash);
+            int q = head.indexOf('?');
+            if (q < 0) {
                 return "";
             }
             StringBuilder sb = new StringBuilder();
-            for (String name : parsed.getQueryParameterNames()) {
+            for (String pair : head.substring(q + 1).split("&", -1)) {
+                if (pair.isEmpty()) {
+                    continue;
+                }
+                int eq = pair.indexOf('=');
+                String name = eq < 0 ? pair : pair.substring(0, eq);
                 if (isTracking(dec(name), stripXsecToken)) {
                     if (sb.length() > 0) {
                         sb.append(',');
@@ -248,16 +256,6 @@ final class CopyLinkHooks {
         } catch (Throwable t) {
             return "?";
         }
-    }
-
-    /** 日志里只放前 80 字符，够看清是不是链接/是否带参数。 */
-    private static String brief(Object text) {
-        if (text == null) {
-            return "null";
-        }
-        String s = text.toString();
-        s = s.replace('\n', ' ');
-        return s.length() <= 80 ? s : s.substring(0, 80) + "…";
     }
 
     private static boolean isTracking(String name, boolean stripXsecToken) {

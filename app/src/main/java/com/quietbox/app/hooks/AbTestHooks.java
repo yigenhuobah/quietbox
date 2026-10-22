@@ -21,9 +21,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
@@ -55,7 +58,7 @@ public final class AbTestHooks {
             Class<?> store = HookKit.findClass(module, f, cl, AB_STORE);
             if (store != null) {
                 for (String name : new String[]{"f", "b"}) {
-                    Method m = HookKit.findMethod(module, f, store, name,
+                    Method m = HookKit.findMethodInHierarchy(module, f, store, name,
                             String.class, Type.class, Object.class);
                     HookKit.install(module, f, "ABStore#" + name, m, valueHook(module, f));
                 }
@@ -63,7 +66,7 @@ public final class AbTestHooks {
 
             Class<?> center = HookKit.findClass(module, f, cl, CONFIG_CENTER);
             if (center != null) {
-                Method m = HookKit.findMethod(module, f, center, "l", String.class);
+                Method m = HookKit.findMethodInHierarchy(module, f, center, "l", String.class);
                 HookKit.install(module, f, "ConfigCenter#l", m, stringHook(module, f));
             }
 
@@ -112,7 +115,10 @@ public final class AbTestHooks {
                     AbRuntime.observe(key, result);
                     AbTest forced = AbRuntime.override(key);
                     if (forced != null) {
-                        return forced.forcedLiteral();
+                        String literal = forced.forcedLiteral();
+                        if (literal != null) {
+                            return literal;
+                        }
                     }
                 }
             } catch (Throwable t) {
@@ -171,10 +177,17 @@ public final class AbTestHooks {
 
         private static volatile Map<String, String> sOverrides = Collections.emptyMap();
         private static final Map<String, String> sObserved = new ConcurrentHashMap<>();
-        private static final Set<String> sSent = ConcurrentHashMap.newKeySet();
+        private static final Map<String, String> sSentValues = new ConcurrentHashMap<>();
         private static final Set<String> sLogged = ConcurrentHashMap.newKeySet();
         private static final int MAX_KEYS = 800;
         private static final int MAX_BATCH = 200;
+
+        /** provider 调用放在独立线程池：模块 App 卡住时最多阻塞 2 秒，不拖死 3 秒刷新线程。 */
+        private static final ExecutorService CALL_POOL = Executors.newCachedThreadPool(r -> {
+            Thread t = new Thread(r, "QuietBox-AB-call");
+            t.setDaemon(true);
+            return t;
+        });
 
         private static volatile boolean sEnabled;
         private static volatile boolean sStarted;
@@ -251,14 +264,17 @@ public final class AbTestHooks {
             if (!sEnabled || key == null || value == null || key.length() > 128) {
                 return;
             }
-            if (!looksLikeAb(key) || sObserved.size() >= MAX_KEYS) {
+            if (!looksLikeAb(key)) {
                 return;
             }
             String text = String.valueOf(value);
             if (text.length() > 200) {
                 text = text.substring(0, 200);
             }
-            sObserved.putIfAbsent(key, text);
+            if (!sObserved.containsKey(key) && sObserved.size() >= MAX_KEYS) {
+                return;
+            }
+            sObserved.put(key, text);
         }
 
         private static boolean looksLikeAb(String key) {
@@ -267,16 +283,30 @@ public final class AbTestHooks {
                     || key.startsWith("local_exp_");
         }
 
+        /** provider 调用最多等 2 秒；超时/异常一律返回 null，由调用方走兜底。 */
+        private static Bundle callProvider(Context ctx, String method, Bundle extras) {
+            Future<Bundle> f = CALL_POOL.submit(() -> ctx.getContentResolver().call(
+                    android.net.Uri.parse("content://" + AbReportProvider.AUTHORITY),
+                    method, null, extras));
+            try {
+                return f.get(2, TimeUnit.SECONDS);
+            } catch (TimeoutException e) {
+                f.cancel(true);
+                return null;
+            } catch (Throwable t) {
+                return null;
+            }
+        }
+
         private static void refresh() {
             // 运行中优先向模块 App 拉取：remote prefs 在宿主里是启动快照，
             // 改开关后不会变，必须靠 provider 这条活通道。
             Context context = context();
             if (context != null) {
                 try {
-                    Bundle b = context.getContentResolver().call(
-                            android.net.Uri.parse("content://" + AbReportProvider.AUTHORITY),
-                            "overrides", null, null);
+                    Bundle b = callProvider(context, "overrides", null);
                     if (b != null) {
+                        sPullErrors = 0;
                         boolean enabled = b.getBoolean(AbReportProvider.KEY_PANEL_ENABLED, false);
                         String raw = b.getString(AbReportProvider.KEY_OVERRIDES, "");
                         if (!raw.equals(sLastRaw)) {
@@ -311,11 +341,18 @@ public final class AbTestHooks {
         }
 
         private static void apply(boolean enabled, Map<String, String> next) {
+            boolean was = sEnabled;
+            Map<String, String> prev = sOverrides;
             sEnabled = enabled;
-            if (!next.equals(sOverrides)) {
+            sOverrides = next;
+            if (was != enabled) {
+                // 开关翻转后旧观测值/上报记录都过期，避免把上一次会话的值继续回传。
+                sObserved.clear();
+                sSentValues.clear();
+            }
+            if (!next.equals(prev)) {
                 Log.i(TAG, "P2-1 overrides loaded: " + next);
             }
-            sOverrides = next;
         }
 
         private static void flush() {
@@ -333,7 +370,7 @@ public final class AbTestHooks {
             List<String> keys = new ArrayList<>();
             List<String> values = new ArrayList<>();
             for (Map.Entry<String, String> e : sObserved.entrySet()) {
-                if (sSent.contains(e.getKey())) {
+                if (e.getValue().equals(sSentValues.get(e.getKey()))) {
                     continue;
                 }
                 keys.add(e.getKey());
@@ -349,10 +386,16 @@ public final class AbTestHooks {
             extras.putStringArray("keys", keys.toArray(new String[0]));
             extras.putStringArray("values", values.toArray(new String[0]));
             try {
-                context.getContentResolver().call(
-                        android.net.Uri.parse("content://" + AbReportProvider.AUTHORITY),
-                        "report", null, extras);
-                sSent.addAll(keys);
+                Bundle result = callProvider(context, "report", extras);
+                if (result == null) {
+                    // 超时或模块 App 不可用：一分钟后再试，别每 3 秒刷日志。
+                    sNextReportTry = System.currentTimeMillis() + 60_000L;
+                    Log.w(TAG, "ab report provider unavailable");
+                    return;
+                }
+                for (int i = 0; i < keys.size(); i++) {
+                    sSentValues.put(keys.get(i), values.get(i));
+                }
             } catch (Throwable t) {
                 // 模块 App 未启动、被 MIUI 拦截等情况：一分钟后再试，别每 3 秒刷日志。
                 sNextReportTry = System.currentTimeMillis() + 60_000L;

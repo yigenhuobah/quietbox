@@ -5,9 +5,10 @@
 #   bash check-mounts.sh <新版apk路径> [缓存输出目录]
 #
 # 例：
-#   bash check-mounts.sh "E:\tmp-xhs-mod\xhs951\xhs-9.51.0.apk"
+#   bash check-mounts.sh "D:\modules\QuietBox\research\xhs950\xhs-9.50.0.apk"
 #
 # 依赖：E:\tools\dexsql\dexsql.exe（首次会为这个 apk 建缓存，约 40 秒）
+# 注意：缓存记录了 APK 的绝对路径，移动 APK 或缓存目录后先删掉 dexsql-cache 再跑。
 #
 # 判定规则：
 #   OK   = 类和方法都在，且方法签名形状没变，hook 大概还能挂上
@@ -91,6 +92,7 @@ Lcom/xingin/spi/IGrowthCupidProxyImpl;|openPushGuideActivity|P1-17 通知引导|
 Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|shouldShowInternal|P1-18 满意度调研|verify_p1_18
 Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|showForVideo|P1-18 满意度兜底|verify_p1_18
 Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|showForImageText|P1-18 满意度兜底|verify_p1_18
+Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|showContentRatingSnackBarIfNeeded|P1-18 满意度公开入口|verify_p1_18
 Lcom/xingin/login/manager/UploadContactServiceExtension;|start|P1-19 通讯录同步|verify_p1_19
 Lcom/xingin/login/manager/UploadContactServiceExtension;|requestContactsSync|P1-19 通讯录同步|verify_p1_19
 Lcom/xingin/login/manager/UploadContactServiceExtension;|installLifecycleObserver|P1-19 通讯录同步|verify_p1_19
@@ -110,21 +112,27 @@ printf '%-8s %-64s %s\n' "状态" "挂载点" "功能"
 printf '%.0s-' {1..110}; echo
 
 bad=0
-echo "$MOUNTS" | while IFS='|' read -r cls mth feat rep; do
+while IFS='|' read -r cls mth feat rep; do
   [ -z "$cls" ] && continue
   cls_hit=$(q "SELECT count(*) FROM classes WHERE descriptor='$cls'" | grep -oE '^\| [0-9]+' | tr -d '| ')
   if [ "${cls_hit:-0}" = "0" ]; then
     printf '%-8s %-64s %s\n' "GONE" "${cls#L}" "$feat  → 报告: $rep"
+    bad=$((bad+1))
     continue
   fi
   mth_hit=$(q "SELECT count(*) FROM methods WHERE class_descriptor='$cls' AND name='$mth'" | grep -oE '^\| [0-9]+' | tr -d '| ')
   if [ "${mth_hit:-0}" = "0" ]; then
     printf '%-8s %-64s %s\n' "SIG" "${cls#L}#$mth  (类在、方法没了)" "$feat  → 报告: $rep"
+    bad=$((bad+1))
     continue
   fi
   printf '%-8s %-64s %s\n' "OK" "${cls#L}#$mth" "$feat"
-done
+done <<< "$MOUNTS"
 
 echo
 echo "OK=还在；GONE=混淆名变了，要重新定位；SIG=方法名变了，看报告里的链路。"
-echo "复核报告都在 E:\\tmp-xhs-mod\\agy-scratch\\ 下。"
+echo "复核报告都在 D:\\modules\\QuietBox\\research\\agy-scratch\\ 下。"
+
+echo
+echo "汇总：GONE/SIG = $bad"
+[ "$bad" -eq 0 ] || exit 1

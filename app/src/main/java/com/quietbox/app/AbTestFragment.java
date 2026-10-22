@@ -27,6 +27,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -89,6 +90,9 @@ public class AbTestFragment extends PreferenceFragmentCompat {
                 mLoadingMore = true;
                 rv.post(() -> {
                     mLoadingMore = false;
+                    if (!isAdded() || getContext() == null) {
+                        return;
+                    }
                     loadMoreOther();
                 });
             }
@@ -120,7 +124,8 @@ public class AbTestFragment extends PreferenceFragmentCompat {
         mMaster.setSummary(R.string.ab_panel_summary);
         mMaster.setOnPreferenceChangeListener((pref, value) -> {
             mAb.setPanelEnabled((Boolean) value);
-            refresh();
+            // 直接传新值：setPanelEnabled 是异步落盘，紧接着读 store 可能还是旧值。
+            refresh((Boolean) value);
             return true;
         });
         screen.addPreference(mMaster);
@@ -148,8 +153,17 @@ public class AbTestFragment extends PreferenceFragmentCompat {
             item.setIcon(R.drawable.ic_test);
             item.setTitle(test.titleRes);
             item.setOnPreferenceChangeListener((pref, value) -> {
-                mAb.setForced(test.key, (Boolean) value, test.forceValue);
-                updateItem(item, test);
+                boolean forced = (Boolean) value;
+                mAb.setForced(test.key, forced, test.forceValue);
+                // remote prefs 的 apply() 是异步的，立刻回读可能拿到旧值；
+                // 这里按本次操作构造一份乐观覆盖表，只用于刷新摘要。
+                Map<String, String> forcedNow = new HashMap<>(mAb.overrides());
+                if (forced) {
+                    forcedNow.put(test.key, test.forceValue);
+                } else {
+                    forcedNow.remove(test.key);
+                }
+                updateItem(item, test, mAb.report(), forcedNow);
                 return true;
             });
             item.setKey(test.key);
@@ -162,41 +176,57 @@ public class AbTestFragment extends PreferenceFragmentCompat {
     }
 
     void refresh() {
+        refresh(null);
+    }
+
+    void refresh(Boolean masterOverride) {
         if (mMaster == null) {
             return;
         }
-        mStore = new ConfigStore(requireContext());
-        mAb = new AbConfigStore(requireContext());
-        boolean master = mStore.get(Feature.AB_TEST_PANEL.key, false);
+        Context ctx = getContext();
+        if (ctx == null) {
+            return;
+        }
+        mStore = new ConfigStore(ctx);
+        mAb = new AbConfigStore(ctx);
+        mAb.syncOverrides();
+        boolean master = masterOverride != null
+                ? masterOverride
+                : mStore.get(Feature.AB_TEST_PANEL.key, false);
         // remote 是启动时的权威值；本地副本给运行中的拉取通道用，二者保持一致。
-        mAb.syncPanelEnabled(master);
+        if (mStore.remote()) {
+            mAb.syncPanelEnabled(master);
+        }
         mMaster.setCheckedValue(master);
         mMaster.setEnabled(mStore.remote());
         mMaster.setSummary(mStore.remote()
                 ? R.string.ab_panel_summary : R.string.ab_need_framework);
 
         boolean active = master && mStore.remote();
+        Map<String, String> report = mAb.report();
+        Map<String, String> overrides = mAb.overrides();
         PreferenceScreen screen = getPreferenceScreen();
-        for (int i = 0; i < screen.getPreferenceCount(); i++) {
-            Preference p = screen.getPreference(i);
-            if (!(p instanceof MaterialSwitchPreference) || p == mMaster) {
-                continue;
+        if (screen != null) {
+            // 开关都挂在 PreferenceCategory 下，必须按 key 全局查找，
+            // 不能只遍历 screen 的直接子节点。
+            for (AbTest test : AbTests.ALL) {
+                Preference p = screen.findPreference(test.key);
+                if (!(p instanceof MaterialSwitchPreference)) {
+                    continue;
+                }
+                MaterialSwitchPreference item = (MaterialSwitchPreference) p;
+                item.setEnabled(active);
+                item.setCheckedValue(overrides.containsKey(test.key));
+                updateItem(item, test, report, overrides);
             }
-            AbTest test = AbTests.byKey(p.getKey());
-            if (test == null) {
-                continue;
-            }
-            MaterialSwitchPreference item = (MaterialSwitchPreference) p;
-            item.setEnabled(active);
-            item.setCheckedValue(mAb.isForced(test.key));
-            updateItem(item, test);
         }
-        refreshOther();
+        refreshOther(report);
     }
 
-    private void updateItem(MaterialSwitchPreference item, AbTest test) {
-        boolean forced = mAb.isForced(test.key);
-        String current = mAb.report().get(test.key);
+    private void updateItem(MaterialSwitchPreference item, AbTest test,
+                            Map<String, String> report, Map<String, String> overrides) {
+        boolean forced = overrides.containsKey(test.key);
+        String current = report.get(test.key);
         String state;
         if (forced) {
             state = getString(R.string.ab_forced_value, test.forceValue);
@@ -209,11 +239,14 @@ public class AbTestFragment extends PreferenceFragmentCompat {
     }
 
     /** 重置分页并加载第一批；后续由滚动监听 / 「加载更多」增量追加。 */
-    private void refreshOther() {
+    private void refreshOther(Map<String, String> report) {
         if (mOther == null) {
             return;
         }
-        Context ctx = requireContext();
+        Context ctx = getContext();
+        if (ctx == null) {
+            return;
+        }
         mOther.removeAll();
         mMore = null;
         mOtherLoaded = 0;
@@ -229,7 +262,6 @@ public class AbTestFragment extends PreferenceFragmentCompat {
                 DateFormat.format("MM-dd HH:mm:ss", last)));
         mOther.addPreference(info);
 
-        Map<String, String> report = mAb.report();
         for (Map.Entry<String, String> e : report.entrySet()) {
             if (!AbTests.isCurated(e.getKey())) {
                 mOtherReport.put(e.getKey(), e.getValue());
@@ -246,7 +278,10 @@ public class AbTestFragment extends PreferenceFragmentCompat {
             updateMore();
             return;
         }
-        Context ctx = requireContext();
+        Context ctx = getContext();
+        if (ctx == null) {
+            return;
+        }
         int end = Math.min(mOtherLoaded + OTHER_BATCH, mOtherKeys.size());
         for (; mOtherLoaded < end; mOtherLoaded++) {
             String key = mOtherKeys.get(mOtherLoaded);

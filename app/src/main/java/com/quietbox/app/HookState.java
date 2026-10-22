@@ -63,23 +63,30 @@ public final class HookState {
         }
     }
 
-    /** 统计快照：ok/miss 计数 + 有 miss 的功能 id 列表。 */
+    /** 统计快照：ok/miss 计数 + 有 miss 的功能 id 列表 + 本次启用的功能数/坏掉的功能数。 */
     public static final class Snapshot {
         public final int ok;
         public final int miss;
         public final List<String> missed;
+        /** 本次启用的功能数（MOUNTS.size()）。 */
+        public final int features;
+        /** miss > 0 的功能数。 */
+        public final int bad;
 
-        Snapshot(int ok, int miss, List<String> missed) {
+        Snapshot(int ok, int miss, List<String> missed, int features, int bad) {
             this.ok = ok;
             this.miss = miss;
             this.missed = missed;
+            this.features = features;
+            this.bad = bad;
         }
     }
 
-    /** 取一份统计快照并清零，供 installAll 结束时推送。 */
-    public static Snapshot drain() {
+    /** 取一份统计快照，不清空。供推送线程判断成功后再 clear()。 */
+    public static Snapshot snapshot() {
         int ok = 0;
         int miss = 0;
+        int bad = 0;
         List<String> missed = new ArrayList<>();
         synchronized (MOUNTS) {
             for (Map.Entry<Feature, int[]> e : MOUNTS.entrySet()) {
@@ -87,11 +94,25 @@ public final class HookState {
                 ok += c[0];
                 miss += c[1];
                 if (c[1] > 0) {
+                    bad++;
                     missed.add(e.getKey().id);
                 }
             }
+            return new Snapshot(ok, miss, missed, MOUNTS.size(), bad);
+        }
+    }
+
+    /** 清空统计（推送成功后调用）。 */
+    public static void clear() {
+        synchronized (MOUNTS) {
             MOUNTS.clear();
         }
-        return new Snapshot(ok, miss, missed);
+    }
+
+    /** 取一份统计快照并清零，供 installAll 结束时推送。 */
+    public static Snapshot drain() {
+        Snapshot s = snapshot();
+        clear();
+        return s;
     }
 }

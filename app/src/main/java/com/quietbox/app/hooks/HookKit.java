@@ -180,9 +180,74 @@ final class HookKit {
         }
     }
 
+    /** 带 module/Feature 的 findByNameAndArity：未找到时统一记 miss。 */
+    @Nullable
+    static Method findByNameAndArity(XposedModule module, Feature f, @Nullable Class<?> cls,
+                                     String name, int arity) {
+        Method m = findByNameAndArity(cls, name, arity);
+        if (m == null) {
+            warn(module, f.id + " skip: method not found "
+                    + (cls == null ? "?" : cls.getName()) + "#" + name + "/" + arity + " 未找到");
+            HookState.markNotFound(f);
+            HookState.note(f, "方法未找到 " + name);
+        }
+        return m;
+    }
+
+    /** 带 module/Feature 的 findByShape：未找到时统一记 miss。 */
+    @Nullable
+    static Method findByShape(XposedModule module, Feature f, @Nullable Class<?> cls,
+                              String name, Class<?>... leading) {
+        Method m = findByShape(cls, name, leading);
+        if (m == null) {
+            warn(module, f.id + " skip: method not found "
+                    + (cls == null ? "?" : cls.getName()) + "#" + name + " 未找到");
+            HookState.markNotFound(f);
+            HookState.note(f, "方法未找到 " + name);
+        }
+        return m;
+    }
+
+    /** 带 module/Feature 的 findMethodQuiet：未找到时统一记 miss。 */
+    @Nullable
+    static Method findMethodQuiet(XposedModule module, Feature f, @Nullable Class<?> cls,
+                                  String name, Class<?>... params) {
+        Method m = findMethodQuiet(cls, name, params);
+        if (m == null) {
+            warn(module, f.id + " skip: method not found "
+                    + (cls == null ? "?" : cls.getName()) + "#" + name + " 未找到");
+            HookState.markNotFound(f);
+            HookState.note(f, "方法未找到 " + name);
+        }
+        return m;
+    }
+
+    /** 沿父类链逐层 getDeclaredMethod（不查接口），未找到时统一记 miss。 */
+    @Nullable
+    static Method findMethodInHierarchy(XposedModule module, Feature f, @Nullable Class<?> cls,
+                                        String name, Class<?>... params) {
+        Class<?> c = cls;
+        while (c != null) {
+            try {
+                return c.getDeclaredMethod(name, params);
+            } catch (NoSuchMethodException ignored) {
+                // 继续向父类找。
+            } catch (Throwable t) {
+                break;
+            }
+            c = c.getSuperclass();
+        }
+        warn(module, f.id + " skip: method not found "
+                + (cls == null ? "?" : cls.getName()) + "#" + name + " 未找到");
+        HookState.markNotFound(f);
+        HookState.note(f, "方法未找到 " + name);
+        return null;
+    }
+
     static boolean install(XposedModule module, Feature f, String label, @Nullable Method m,
                            XposedInterface.Hooker hooker) {
         if (m == null) {
+            warn(module, f.id + " skip: no executable for " + label);
             return false;
         }
         return install(module, f, label, (java.lang.reflect.Executable) m, hooker);
@@ -193,6 +258,7 @@ final class HookKit {
                            @Nullable java.lang.reflect.Executable m,
                            XposedInterface.Hooker hooker) {
         if (m == null) {
+            warn(module, f.id + " skip: no executable for " + label);
             return false;
         }
         try {

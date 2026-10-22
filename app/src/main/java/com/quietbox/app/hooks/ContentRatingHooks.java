@@ -28,6 +28,11 @@ final class ContentRatingHooks {
             Method should = HookKit.findMethod(module, f, cls, SHOULD_METHOD, String.class);
             HookKit.install(module, f, SHOULD_METHOD, should,
                     HookKit.constBool(module, f, SHOULD_METHOD, false));
+            // 公开入口：showContentRatingSnackBarIfNeeded(Activity, IContentRatingProxy$b, int, int)V。
+            String entry = "showContentRatingSnackBarIfNeeded";
+            HookKit.install(module, f, entry,
+                    HookKit.findByNameAndArity(module, f, cls, entry, 4),
+                    HookKit.skipVoid(module, f, entry));
             for (String name : new String[]{"showForVideo", "showForImageText"}) {
                 Method m = HookKit.findMethod(module, f, cls, name);
                 if (m != null) {

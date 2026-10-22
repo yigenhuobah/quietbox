@@ -85,7 +85,6 @@ public class SettingsFragment extends PreferenceFragmentCompat {
 
         Preference status = findPreference("status");
         if (status != null) {
-            status.setTitle(R.string.status_title);
             XposedService service = ServiceBridge.get();
             if (service == null) {
                 status.setTitle(R.string.status_connecting);
@@ -123,8 +122,8 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         if (warning != null) {
             MountReport report = new MountReport(requireContext());
             if (report.incompatible()) {
-                warning.setSummary(getString(R.string.mount_warning, report.miss(),
-                        report.ok() + report.miss()));
+                warning.setSummary(getString(R.string.mount_warning, report.bad(),
+                        report.features() > 0 ? report.features() : report.ok() + report.miss()));
                 warning.setVisible(true);
             } else {
                 warning.setVisible(false);
@@ -149,7 +148,8 @@ public class SettingsFragment extends PreferenceFragmentCompat {
             MaterialSwitchPreference sw = (MaterialSwitchPreference) token;
             sw.setCheckedValue(mStore.get(Config.KEY_STRIP_XSEC_TOKEN,
                     Config.DEFAULT_STRIP_XSEC_TOKEN));
-            sw.setEnabled(writable);
+            sw.setEnabled(writable && mStore.get(Feature.COPY_LINK_SANITIZE.key,
+                    Feature.COPY_LINK_SANITIZE.defaultEnabled));
         }
     }
 

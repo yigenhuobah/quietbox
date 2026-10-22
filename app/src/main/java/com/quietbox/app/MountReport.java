@@ -35,6 +35,16 @@ public final class MountReport {
         return mSp.getInt(AbReportProvider.KEY_MOUNT_MISS, 0);
     }
 
+    /** 本次启用的功能数。 */
+    public int features() {
+        return mSp.getInt(AbReportProvider.KEY_MOUNT_FEATURES, 0);
+    }
+
+    /** miss > 0 的功能数。 */
+    public int bad() {
+        return mSp.getInt(AbReportProvider.KEY_MOUNT_BAD, 0);
+    }
+
     /** 有 miss 的功能 id，逗号分隔。 */
     public String detail() {
         return mSp.getString(AbReportProvider.KEY_MOUNT_DETAIL, "");
@@ -42,6 +52,6 @@ public final class MountReport {
 
     /** 是否应该显示「当前小红书版本不兼容」横幅。 */
     public boolean incompatible() {
-        return received() && miss() >= MISS_THRESHOLD;
+        return received() && bad() >= 2;
     }
 }

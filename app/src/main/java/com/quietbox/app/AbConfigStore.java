@@ -2,6 +2,7 @@ package com.quietbox.app;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.util.Log;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -14,6 +15,8 @@ import java.util.Map;
  * 探测结果也写在本地 prefs。
  */
 final class AbConfigStore {
+
+    private static final String TAG = "QuietBox";
 
     private final Context mContext;
     private final SharedPreferences mRemote;
@@ -43,8 +46,30 @@ final class AbConfigStore {
 
     /** 把本地副本对齐到 remote 的真实值（升级或清数据后可能不一致）。 */
     void syncPanelEnabled(boolean enabled) {
+        if (mRemote == null) {
+            // 没有 remote 说明写不进宿主，冷启动时本地回退值不能覆盖活通道。
+            return;
+        }
         if (panelEnabled() != enabled) {
             mReport.edit().putBoolean(AbReportProvider.KEY_PANEL_ENABLED, enabled).apply();
+        }
+    }
+
+    /** 把 remote 里的覆盖表同步到本地副本，供宿主运行中通过 provider 拉取。 */
+    void syncOverrides() {
+        if (mRemote == null) {
+            return;
+        }
+        try {
+            String raw = mRemote.getString(Config.KEY_AB_OVERRIDES, "");
+            if (raw == null) {
+                raw = "";
+            }
+            if (!raw.equals(mReport.getString(AbReportProvider.KEY_OVERRIDES, ""))) {
+                mReport.edit().putString(AbReportProvider.KEY_OVERRIDES, raw).apply();
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "sync overrides failed", t);
         }
     }
 
@@ -57,7 +82,12 @@ final class AbConfigStore {
     }
 
     void setForced(String key, boolean forced, String value) {
-        Map<String, String> map = overrides();
+        String raw = read(Config.KEY_AB_OVERRIDES);
+        if (raw == null) {
+            // 读失败时不能拿空表回写，否则会把其他已强开的项清掉。
+            return;
+        }
+        Map<String, String> map = parse(raw);
         if (forced) {
             map.put(key, value);
         } else {
@@ -86,7 +116,8 @@ final class AbConfigStore {
         try {
             return (mRemote != null ? mRemote : mLocal).getString(key, "");
         } catch (Throwable t) {
-            return "";
+            Log.w(TAG, "read ab config failed: " + key, t);
+            return null;
         }
     }
 
@@ -94,9 +125,15 @@ final class AbConfigStore {
         try {
             SharedPreferences sp = mRemote != null ? mRemote : mLocal;
             sp.edit().putString(Config.KEY_AB_OVERRIDES, value).apply();
-            // 宿主里的 remote prefs 是启动快照，运行中要靠本地副本 + provider 拉取。
+        } catch (Throwable t) {
+            Log.w(TAG, "write ab overrides failed", t);
+        }
+        // 宿主里的 remote prefs 是启动快照，运行中要靠本地副本 + provider 拉取。
+        // 第一处失败不能跳过第二处，否则活通道会一直返回旧表。
+        try {
             mReport.edit().putString(AbReportProvider.KEY_OVERRIDES, value).apply();
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            Log.w(TAG, "write ab overrides mirror failed", t);
         }
     }
 

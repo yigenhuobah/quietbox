@@ -20,9 +20,10 @@ import io.github.libxposed.api.XposedModule;
  * 复用 P0-2 已验证的列表过滤链路（r7d/m0#Q、#A0、m7d/s#Yd，见 FeedAdHooks），
  * 只动列表内容、不动游标，分页不受影响。三个功能各挂各的谓词，互不依赖。
  *
- * 判定优先用 NoteItemBean.modelType 字符串，字段（live / goodsNoteV2）作兜底：
- * modelType 到卡片类型的取值映射需真机日志确认，因此这里两条判据都实现，
- * 哪条先命中就用哪条——误判风险集中在 modelType，字段兜底只在字段非空时生效。
+ * 判定优先用 NoteItemBean.modelType 字符串：modelType 非空时只按类型判定；
+ * 仅当 modelType 缺失（null 或空串）时才回退到字段（live / goodsNoteV2）。
+ * modelType 到卡片类型的取值映射需真机日志确认（见 logModelType）。
+ * 投票卡没有字段兜底。
  *
  * 注意：只挂首页信息流的 Q/A0/Yd 路径（已验证调用面），不碰详情连播链路。
  */
@@ -40,6 +41,9 @@ final class FeedCardHooks {
 
     /** 诊断用：每个入口只记一次"被调用过"，确认挂载点真的在链路上。 */
     private static final Set<String> SEEN = new HashSet<>();
+
+    /** 诊断用：记录出现过的 modelType 取值（每个取值一次，最多 64 个）。 */
+    private static final Set<String> MODEL_SEEN = new HashSet<>();
 
     private FeedCardHooks() {
     }
@@ -134,31 +138,33 @@ final class FeedCardHooks {
         return removed;
     }
 
-    /** 判定某一类卡片：modelType 命中即算；字段判据只在对应 kind 下生效。 */
+    /**
+     * 判定某一类卡片：modelType 非空时只按类型判定；缺失（null 或空串）时才用字段兜底。
+     * 投票卡无字段兜底。
+     */
     private static boolean matches(Object note, String kind) {
         String modelType = modelType(note);
-        if (modelType != null) {
+        String mt = modelType == null ? null : modelType.trim().toLowerCase(java.util.Locale.ROOT);
+        if (mt != null && !mt.isEmpty()) {
+            boolean matched;
             switch (kind) {
                 case "live":
-                    if (modelType.contains("live")) {
-                        return true;
-                    }
+                    matched = mt.contains("live");
                     break;
                 case "goods":
-                    if (modelType.contains("goods")) {
-                        return true;
-                    }
+                    matched = mt.contains("goods");
                     break;
                 case "vote":
-                    if (modelType.contains("vote") || modelType.contains("poll")) {
-                        return true;
-                    }
+                    matched = mt.contains("vote") || mt.contains("poll");
                     break;
                 default:
+                    matched = false;
                     break;
             }
+            logModelType(mt);
+            return matched;
         }
-        // 兜底：按字段非空判定。modelType 拿不到或取值映射没覆盖时才走到这里。
+        // modelType 缺失时才用字段兜底
         switch (kind) {
             case "live":
                 return nonNull(note, LIVE, "live");
@@ -167,6 +173,16 @@ final class FeedCardHooks {
             default:
                 return false;
         }
+    }
+
+    /** 每个 modelType 取值只记一次（上限 64），供真机确认服务端实际取值。 */
+    private static void logModelType(String mt) {
+        synchronized (MODEL_SEEN) {
+            if (MODEL_SEEN.size() >= 64 || !MODEL_SEEN.add(mt)) {
+                return;
+            }
+        }
+        android.util.Log.i("QuietBox", "P1-21/22/23 modelType=" + mt);
     }
 
     private static String modelType(Object note) {
