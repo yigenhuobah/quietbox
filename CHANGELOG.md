@@ -14,6 +14,17 @@
 - AB 面板：修复 `refresh()` 只遍历顶层导致状态/摘要不刷新；总开关改值即时生效；provider 拉取加 2 秒超时；观测值变化会重发。
 - 文案：修正「修改后立即生效」「默认最高画质」等与实现不符的表述。
 
+### 验证
+
+真机 25102RKBEC（Android 17 / LSPosed 2.2.1 / 小红书 9.50.0）：
+
+- 模块注入成功：67 个 hook、21 个功能，0 miss / 0 bad；`mount report sent=true`。
+- AB 面板可打开，总开关开启，精选实验显示「已强制为 true」。
+- 复制链接：短链 `https://xhslink.cn/o/...` 原样保留（无追踪参数，符合预期）。
+- 冷启动：无卡层，进入主界面，无 FATAL/ANR。
+- 直播/带货/投票卡：hook 已注册；当前信息流未出现匹配卡片，未产生 hit。
+- P1-15~P1-23：hook 已注册；本次使用未自然触发。
+
 构建信息：`quietbox-0.6.1.apk`，versionCode 10，2,575,008 字节，SHA-256
 `f9fa835fbe8cd8c5eb749284e0e5d42d0bf6534daf2a44f877cb7ab971fc1f2c`。
 
