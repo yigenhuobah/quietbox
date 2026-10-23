@@ -7,7 +7,6 @@ import android.os.SystemClock;
 import android.util.Log;
 import android.widget.Toast;
 
-import androidx.fragment.app.Fragment;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 
@@ -20,10 +19,10 @@ import io.github.libxposed.service.HookedTarget;
 import io.github.libxposed.service.XposedService;
 
 /**
- * 主设置页：状态卡 + 异常横幅 + AD/UI/PV/EN/EX 分组开关 + 二级页入口 + 页脚。
+ * 设置 tab：状态卡 + 异常横幅 + AD/UI/PV/EN/EX 分组开关 + 页脚。
  *
- * 主页面零诊断：这里不展示逐功能 registered/hit/skip，只保留状态卡和聚合横幅；
- * 细节统一放到 {@link DiagnosticsFragment}。
+ * 设置页零诊断：这里不展示逐功能 registered/hit/skip，只保留状态卡和聚合横幅；
+ * 细节统一放到 {@link DiagnosticsFragment}（底栏的“诊断”tab）。
  */
 public class SettingsFragment extends PreferenceFragmentCompat {
 
@@ -130,29 +129,8 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         }
     }
 
-    /** 二级页入口与页脚。 */
+    /** 页脚说明。 */
     private void bindPages() {
-        Preference diag = findPreference("page_diagnostics");
-        if (diag != null) {
-            diag.setOnPreferenceClickListener(p -> {
-                openSecondary(new DiagnosticsFragment());
-                return true;
-            });
-        }
-        Preference ab = findPreference("page_ab");
-        if (ab != null) {
-            ab.setOnPreferenceClickListener(p -> {
-                openSecondary(new AbTestFragment());
-                return true;
-            });
-        }
-        Preference about = findPreference("page_about");
-        if (about != null) {
-            about.setOnPreferenceClickListener(p -> {
-                openSecondary(new AboutFragment());
-                return true;
-            });
-        }
         Preference footer = findPreference("footer");
         if (footer != null) {
             footer.setSummary(getString(R.string.footer_restart,
@@ -338,17 +316,6 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         } catch (Throwable ignored) {
         }
         return false;
-    }
-
-    /** 打开二级页。MainActivity 在 onBackStackChanged 中同步工具栏返回箭头。 */
-    private void openSecondary(Fragment fragment) {
-        if (!isAdded()) {
-            return;
-        }
-        getParentFragmentManager().beginTransaction()
-                .replace(R.id.settings_container, fragment)
-                .addToBackStack(null)
-                .commit();
     }
 
     private String targetVersion() {

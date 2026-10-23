@@ -15,7 +15,6 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -27,12 +26,11 @@ import javax.xml.parsers.DocumentBuilderFactory;
  * 非功能 key 白名单说明（按当前 prefs.xml 实际内容）：
  * - status / warning：设置页顶部状态卡与警告横幅，由 StatusProvider 动态填充；
  * - p1_9_strip_xsec_token：PV-03 的子选项，不是独立 Feature；
- * - page_*：二级页面入口（诊断、实验、关于）；
  * - footer：页脚说明。
  * 以后新增非功能 key 必须同步这里，否则测试失败——这是故意的。
  *
- * EX-02（AB 测试面板）不是主设置页开关，入口是 page_ab，面板本身由
- * AbTestFragment 动态构建；它仍属于非 blocked Feature，因此单独登记页面入口。
+ * EX-02（AB 测试面板）不再是设置页开关，也不再是二级页入口：它是底栏的
+ * “测试”tab，面板本身由 AbTestFragment 动态构建，因此不出现于 prefs.xml。
  */
 public class PrefsFeatureConsistencyTest {
 
@@ -49,38 +47,29 @@ public class PrefsFeatureConsistencyTest {
     /** QuietBox 的功能 key 形如 p0_1_* / p1_13_* / p2_1_*。 */
     private static final Pattern FEATURE_LIKE_KEY = Pattern.compile("^p\\d+_\\d+_.+");
 
-    /** 由二级页承载、不在主设置页渲染的 Feature -> 页面入口 key。 */
-    private static final Map<Feature, String> PAGE_ONLY_FEATURES =
-            Map.of(Feature.AB_TEST_PANEL, "page_ab");
+    /** 由底栏 tab 承载、不在设置页渲染的 Feature。 */
+    private static final Set<Feature> TAB_ONLY_FEATURES = new HashSet<>(Arrays.asList(
+            Feature.AB_TEST_PANEL));
 
     @Test
     public void everyNonBlockedFeatureHasPreference() throws Exception {
         List<String> keys = preferenceKeys();
         for (Feature f : Feature.values()) {
-            if (f.blocked()) {
+            if (f.blocked() || TAB_ONLY_FEATURES.contains(f)) {
                 continue;
             }
-            String pageKey = PAGE_ONLY_FEATURES.get(f);
-            boolean present = keys.contains(f.key)
-                    || (pageKey != null && keys.contains(pageKey));
-            assertTrue("prefs.xml 缺少功能开关或页面入口: " + f.id + " (" + f.key + ")",
-                    present);
+            assertTrue("prefs.xml 缺少功能开关: " + f.id + " (" + f.key + ")",
+                    keys.contains(f.key));
         }
     }
 
     @Test
-    public void pageOnlyFeaturesPointAtExistingEntry() throws Exception {
+    public void tabOnlyFeaturesAreNotRenderedAsPreferences() throws Exception {
         List<String> keys = preferenceKeys();
-        for (Map.Entry<Feature, String> e : PAGE_ONLY_FEATURES.entrySet()) {
-            Feature f = e.getKey();
-            String pageKey = e.getValue();
-            assertFalse("page-only Feature 不能是 blocked: " + f.id, f.blocked());
-            assertFalse("page-only Feature 不应再以开关 key 出现: " + f.key,
+        for (Feature f : TAB_ONLY_FEATURES) {
+            assertFalse("tab-only Feature 不能是 blocked: " + f.id, f.blocked());
+            assertFalse("tab-only Feature 不应再以开关 key 出现: " + f.key,
                     keys.contains(f.key));
-            assertTrue("页面入口不存在: " + pageKey + " -> " + f.id,
-                    keys.contains(pageKey));
-            assertTrue("页面入口必须列入非功能白名单: " + pageKey,
-                    isWhitelistedNonFeature(pageKey));
         }
     }
 

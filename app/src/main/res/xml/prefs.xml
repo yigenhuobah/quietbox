@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    主设置页：状态卡 -> 异常横幅 -> AD/UI/PV/EN/EX 分组 -> 二级页入口 -> 页脚。
+    主设置页：状态卡 -> 异常横幅 -> AD/UI/PV/EN/EX 分组 -> 页脚。
     每个功能行的 android:key 必须与 Feature.key 完全一致；
     标题/摘要由 SettingsFragment 从 Feature 注入，这里只声明 key 与分组图标。
     blocked 功能保留 Feature 条目与编号，但不在设置页渲染。
@@ -123,21 +123,6 @@
             android:key="p1_15_note_unavailable_view" />
 
     </PreferenceCategory>
-
-    <Preference
-        android:key="page_diagnostics"
-        android:summary="@string/page_diagnostics_summary"
-        android:title="@string/page_diagnostics" />
-
-    <Preference
-        android:key="page_ab"
-        android:summary="@string/page_ab_summary"
-        android:title="@string/page_ab" />
-
-    <Preference
-        android:key="page_about"
-        android:summary="@string/page_about_summary"
-        android:title="@string/page_about" />
 
     <Preference
         android:key="footer"

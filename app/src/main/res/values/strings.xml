@@ -28,7 +28,11 @@
     <string name="group_en">功能增强</string>
     <string name="group_ex">实验功能</string>
 
-    <!-- 二级页入口 -->
+    <!-- 底栏 tab -->
+    <string name="tab_settings">设置</string>
+    <string name="tab_test">测试</string>
+
+    <!-- 诊断与关于页标题 -->
     <string name="page_diagnostics">诊断</string>
     <string name="page_diagnostics_summary">逐功能查看挂载与命中</string>
     <string name="page_ab">实验</string>
