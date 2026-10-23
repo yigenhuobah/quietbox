@@ -17,7 +17,7 @@ import io.github.libxposed.api.XposedModule;
 /**
  * AD-08/09/10 信息流直播卡、带货卡、投票卡过滤。
  *
- * 复用 AD-02 已验证的列表过滤链路（r7d/m0#Q、#A0、m7d/s#Yd，见 FeedAdHooks），
+ * 复用 AD-02 已验证的列表过滤链路（l8d/m0#Q、#A0、g8d/s#Yd，见 FeedAdHooks；9.50.0 为 r7d/m0、m7d/s），
  * 只动列表内容、不动游标，分页不受影响。三个功能各挂各的谓词，互不依赖。
  *
  * 判定优先用 NoteItemBean.modelType 字符串：modelType 非空时只按类型判定；
@@ -29,10 +29,10 @@ import io.github.libxposed.api.XposedModule;
  */
 final class FeedCardHooks {
 
-    /** 首页列表实现（混淆类）：追加/刷新/插入。 */
-    private static final String FEED_LIST = "r7d.m0";
-    /** 分页上游（混淆类）。 */
-    private static final String FEED_PAGER = "m7d.s";
+    /** 首页列表实现（混淆类）：追加/刷新/插入。9.50.0 为 r7d.m0。 */
+    private static final String FEED_LIST = "l8d.m0";
+    /** 分页上游（混淆类）。9.50.0 为 m7d.s。 */
+    private static final String FEED_PAGER = "g8d.s";
 
     /** NoteItemBean.modelType 字段缓存；null 表示该类没有这个字段。 */
     private static final Map<Class<?>, Field> MODEL_TYPE = new HashMap<>();
@@ -83,9 +83,10 @@ final class FeedCardHooks {
             }
             Class<?> pager = HookKit.findClass(module, f, cl, FEED_PAGER);
             if (pager != null) {
-                HookKit.install(module, f, "m7d.s.Yd",
+                // 9.51.0 起 Yd 的列表参数从 0 移到 1（参数 0 变成 isRefresh），见 FeedAdHooks。
+                HookKit.install(module, f, "g8d.s.Yd",
                         HookKit.findByNameAndArity(pager, "Yd", 3),
-                        dropHook(module, f, "m7d.s.Yd", 0, kind));
+                        dropHook(module, f, "g8d.s.Yd", 1, kind));
             }
         } catch (Throwable t) {
             HookKit.error(module, f.id + " install aborted", t);

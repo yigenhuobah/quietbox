@@ -34,9 +34,9 @@ import io.github.libxposed.api.XposedModule;
 /**
  * AB 测试面板的运行时。
  *
- * 读取点只有三处，覆盖小红书 9.50.0 的全部 AB 读取：
+ * 读取点只有三处，覆盖小红书 9.51.0 的全部 AB 读取：
  * 1) tq.h#f / tq.h#b —— ABTest SDK 的 getValueJustOnce / getValue；
- * 2) eb6.o#l —— ConfigCenter 的字符串取值总入口。
+ * 2) mb6.o#l —— ConfigCenter 的字符串取值总入口（9.50.0 为 eb6.o#l，签名不变）。
  *
  * 强制值来自模块 App：remote prefs 作为启动兜底，运行中每 3 秒通过
  * AbReportProvider 拉取本地副本（remote prefs 在宿主里是启动快照，不会热更新）。
@@ -47,7 +47,7 @@ public final class AbTestHooks {
 
     private static final String TAG = "QuietBox";
     private static final String AB_STORE = "tq.h";
-    private static final String CONFIG_CENTER = "eb6.o";
+    private static final String CONFIG_CENTER = "mb6.o";
 
     private AbTestHooks() {
     }
@@ -101,7 +101,7 @@ public final class AbTestHooks {
     }
 
     /**
-     * eb6.o#l 直接返回字符串，调用方自己用 Gson 按 TypeToken 解析。
+     * mb6.o#l 直接返回字符串，调用方自己用 Gson 按 TypeToken 解析。
      * 因此这里喂回去的也必须是 Gson 能按目标类型解析的字面量，否则解析失败
      * 会静默回落到默认值。
      */

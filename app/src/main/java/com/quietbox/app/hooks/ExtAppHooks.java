@@ -18,18 +18,19 @@ import io.github.libxposed.api.XposedModule;
 /**
  * AD-04 广告外跳拦截。
  *
- * 链路（2026-10-16 DexSQL 复核，报告 E:\tmp-xhs-mod\agy-scratch\verify_p1_7.md）：
+ * 链路（2026-10-16 DexSQL 复核，报告 E:\tmp-xhs-mod\agy-scratch\verify_p1_7.md；
+ * 9.51.0 起汇聚点类由 p0e/i0 改名为 k1e/i0，方法签名不变）：
  *   广告落地页 WebView（ExternalWebViewActivityV2）触发三方 scheme
- *     → Llzd/l0.L → Lp0e/i0.b（唯一汇聚点）
+ *     → Llzd/l0.L → Lk1e/i0.b（唯一汇聚点）
  *         ├─ Path A：AdRedirectInfo.c()(showXhsOpenAppDialog)==true
  *         │    → IAdvertProxy.gotoExtApp → AdvertSpiImpl.gotoExtApp → startActivity
  *         └─ Path B：showXhsOpenAppDialog==false 或 AdRedirectInfo==null
  *              → XYUriUtils → Context.startActivity（不经 gotoExtApp）
  *
  * 之前注释"gotoExtApp 全源码无调用点"是错的：搜的是实现类的直接调用（SPI 无直接 invoke），
- * 真实调用方 invoke 的是接口 IAdvertProxy。已核实调用方存在（Lp0e/i0.b 等）。
+ * 真实调用方 invoke 的是接口 IAdvertProxy。已核实调用方存在（9.50.0 为 Lp0e/i0.b，9.51.0 为 Lk1e/i0.b）。
  * gotoExtApp 仍是广告专用 SPI 的动作方法，跳过原方法体即阻断 Path A。
- * Path B 走 XYUriUtils，gotoExtApp 拦不到，故补挂汇聚点 Lp0e/i0.b：
+ * Path B 走 XYUriUtils，gotoExtApp 拦不到，故补挂汇聚点 Lk1e/i0.b：
  *   仅在 ctx 是 ExternalWebViewActivityV2 且 scheme 非 http(s) 时返回 false（未处理），
  *   让落地页留在 WebView 内，不拉起外部 App；普通 http(s) 导航不受影响。
  */
@@ -38,8 +39,8 @@ final class ExtAppHooks {
     private static final String CLAZZ = "com.xingin.advert.spi.AdvertSpiImpl";
     private static final String METHOD = "gotoExtApp";
 
-    /** 广告落地页 WebView 三方 URL 的唯一汇聚点。 */
-    private static final String CONVERGE = "p0e.i0";
+    /** 广告落地页 WebView 三方 URL 的唯一汇聚点。9.50.0 为 p0e.i0。 */
+    private static final String CONVERGE = "k1e.i0";
 
     private static final String EXT_WEBVIEW = "com.xingin.xywebview.activity.ExternalWebViewActivityV2";
 
@@ -58,10 +59,10 @@ final class ExtAppHooks {
                 // b(Uri, Context, AdRedirectInfo, boolean, boolean)：后三参是混淆/实体类型，
                 // 用前导参数 (Uri, Context) 定位。
                 Method b = HookKit.findByShape(i0, "b", Uri.class, Context.class);
-                HookKit.install(module, f, "p0e.i0#b", b, convergeHook(module, f));
+                HookKit.install(module, f, "k1e.i0#b", b, convergeHook(module, f));
             }
 
-            HookState.note(f, "gotoExtApp（Path A）+ 落地页外跳汇聚点 p0e.i0#b（Path B，限 ExternalWebViewActivityV2 非 http(s)）");
+            HookState.note(f, "gotoExtApp（Path A）+ 落地页外跳汇聚点 k1e.i0#b（Path B，限 ExternalWebViewActivityV2 非 http(s)）");
         } catch (Throwable t) {
             HookKit.error(module, f.id + " install aborted", t);
             HookState.note(f, "安装异常");
@@ -76,11 +77,11 @@ final class ExtAppHooks {
                 if (uri instanceof Uri && ctx != null
                         && isExternalWebView(ctx.getClass())
                         && isAppScheme(((Uri) uri).getScheme())) {
-                    HookKit.hit(module, f, "p0e.i0#b blocked scheme=" + ((Uri) uri).getScheme());
+                    HookKit.hit(module, f, "k1e.i0#b blocked scheme=" + ((Uri) uri).getScheme());
                     return Boolean.FALSE;
                 }
             } catch (Throwable t) {
-                HookKit.error(module, f.id + " intercept error p0e.i0#b", t);
+                HookKit.error(module, f.id + " intercept error k1e.i0#b", t);
             }
             return chain.proceed();
         };

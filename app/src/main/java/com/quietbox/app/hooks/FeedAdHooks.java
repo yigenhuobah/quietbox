@@ -16,18 +16,18 @@ import io.github.libxposed.api.XposedModule;
 /**
  * AD-02 信息流广告过滤。
  *
- * 9.50.0 的信息流广告有两种来源（2026-10-17 DexSQL 复核）：
+ * 9.51.0 的信息流广告有两种来源（2026-10-24 DexSQL 复核，9.50.0 为 r7d.m0/m7d.s）：
  *
  * 1) 开屏关联的首页第 2 位广告（2-pos）：客户端自己插，链路是
  *    AdsHomeFeedManagerServiceImpl.handleFeedDataIfNeed → recordAdsNoteData
- *    → xy.c → Lr7d/m0.e0 插入。这一种旧 hook（只跳 handleFeedDataIfNeed）能覆盖。
+ *    → … → Ll8d/m0.e0 插入。这一种旧 hook（只跳 handleFeedDataIfNeed）能覆盖。
  *
  * 2) **普通信息流广告**：服务端直接下发 NoteItemBean.isAd=true，客户端没有"插入广告"
  *    的方法可拦，只能在列表层过滤。旧 hook 对这类完全无效。
  *
  * 本类两层都做：
  * - 2-pos：跳 handleFeedDataIfNeed + recordAdsNoteData，并守卫 m0.e0。
- * - 普通广告：在 m0.Q / m0.A0 / m7d.s.Yd 调用原方法前，从入参 ArrayList 移除
+ * - 普通广告：在 m0.Q / m0.A0 / g8d.s.Yd 调用原方法前，从入参 ArrayList 移除
  *   isAd==true 的项。只动列表内容，不动游标，分页不受影响。
  *
  * isAd 是 NoteItemBean 的**字段**（不是 getter）：Lcom/xingin/entities/NoteItemBean;->isAd:Z。
@@ -38,10 +38,10 @@ final class FeedAdHooks {
     private static final String RECORD_METHOD = "recordAdsNoteData";
     private static final String HANDLE_METHOD = "handleFeedDataIfNeed";
 
-    /** 首页列表实现（混淆类）：追加/刷新/插入。 */
-    private static final String FEED_LIST = "r7d.m0";
-    /** 分页上游（混淆类）。 */
-    private static final String FEED_PAGER = "m7d.s";
+    /** 首页列表实现（混淆类）：追加/刷新/插入。9.50.0 为 r7d.m0。 */
+    private static final String FEED_LIST = "l8d.m0";
+    /** 分页上游（混淆类）。9.50.0 为 m7d.s。 */
+    private static final String FEED_PAGER = "g8d.s";
 
     /** 按 NoteItemBean 子类缓存 isAd 字段；找不到时缓存 null 避免反复反射。 */
     private static final Map<Class<?>, Field> IS_AD = new HashMap<>();
@@ -57,7 +57,7 @@ final class FeedAdHooks {
         try {
             installTwoPosition(module, cl, f);
             installListFilter(module, cl, f);
-            HookState.note(f, "2-pos（handleFeedDataIfNeed/recordAdsNoteData/m0.e0）+ 普通广告列表过滤（m0.Q/m0.A0/m7d.s.Yd）");
+            HookState.note(f, "2-pos（handleFeedDataIfNeed/recordAdsNoteData/m0.e0）+ 普通广告列表过滤（m0.Q/m0.A0/g8d.s.Yd）");
         } catch (Throwable t) {
             HookKit.error(module, f.id + " install aborted", t);
             HookState.note(f, "安装异常");
@@ -106,8 +106,10 @@ final class FeedAdHooks {
         }
         Class<?> pager = HookKit.findClass(module, f, cl, FEED_PAGER);
         if (pager != null) {
-            HookKit.install(module, f, "m7d.s.Yd", HookKit.findByNameAndArity(pager, "Yd", 3),
-                    dropAdsHook(module, f, "m7d.s.Yd", 0));
+            // Yd(boolean isRefresh, ArrayList pageData, 回调)：9.51.0 起列表从参数 0 移到参数 1
+            // （参数 0 变成 isRefresh 布尔），列表经回调 onSuccess 交给 m0.A0。
+            HookKit.install(module, f, "g8d.s.Yd", HookKit.findByNameAndArity(pager, "Yd", 3),
+                    dropAdsHook(module, f, "g8d.s.Yd", 1));
         }
     }
 
