@@ -25,14 +25,18 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
+      # ubuntu-latest 自带 Android SDK 与 cmdline-tools，不再使用
+      # android-actions/setup-android：该 action 会尝试安装已被官方仓库移除的
+      # 旧 "tools" 包，在新 runner 镜像上随机失败。
       - name: Install Android SDK packages
         run: |
           set -euo pipefail
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-37.0" "build-tools;37.0.0"
+          SDKM="$(command -v sdkmanager || true)"
+          if [ -z "$SDKM" ]; then
+            SDKM="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}/cmdline-tools/latest/bin/sdkmanager"
+          fi
+          yes | "$SDKM" --licenses >/dev/null || true
+          "$SDKM" "platforms;android-37.0" "build-tools;37.0.0"
 
       - name: Create platforms/android-37 fallback symlink
         # compileSdk 37 会被 AGP 解析为 platforms/android-37，而 SDK 仓库里的
