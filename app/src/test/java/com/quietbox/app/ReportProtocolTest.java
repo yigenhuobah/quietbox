@@ -62,4 +62,46 @@ public class ReportProtocolTest {
         assertFalse(ReportProtocol.isValidValue(null));
         assertFalse(ReportProtocol.isValidValue("a".repeat(257)));
     }
+
+    @Test
+    public void validKeyRejectsOversizedKnownFeatureKey() {
+        String valid = ReportProtocol.PREFIX_HIT + Feature.SPLASH_AD_SKIP.key;
+        assertTrue(ReportProtocol.validKey(valid));
+        String oversized = valid + "x".repeat(ReportProtocol.MAX_KEY - valid.length() + 1);
+        assertTrue(oversized.length() > ReportProtocol.MAX_KEY);
+        assertFalse("超过 MAX_KEY 的键必须拒绝", ReportProtocol.validKey(oversized));
+    }
+
+    @Test
+    public void validKeyRejectsMalformedPrefixShapes() {
+        assertFalse(ReportProtocol.validKey("reg."));
+        assertFalse(ReportProtocol.validKey("hit"));
+        assertFalse(ReportProtocol.validKey("reg.."));
+        assertFalse(ReportProtocol.validKey("reg. "));
+        assertFalse(ReportProtocol.validKey(" hit.p0_1_splash_ad_skip"));
+    }
+
+    /**
+     * QuietBox 的回传通道是 Bundle + String，不是 JSON：skip 原因是自由文本，
+     * 只受长度约束。这里锁住「畸形 JSON 不会被当成结构解析」这一事实；
+     * 若将来引入 JSON 载荷，应改由专门的解析函数拒绝，而不是放宽本测试。
+     */
+    @Test
+    public void malformedJsonIsOpaqueValueNotParsed() {
+        assertTrue(ReportProtocol.isValidValue("{\"broken\":"));
+        assertTrue(ReportProtocol.isValidValue("null"));
+        assertTrue(ReportProtocol.isValidValue("[]"));
+        assertFalse(ReportProtocol.validKey("{\"broken\":"));
+        assertFalse(ReportProtocol.isValidValue("{\"a\":\"" + "x".repeat(300)));
+    }
+
+    @Test
+    public void multiProcessHitSequenceKeepsHistoricalMaximum() {
+        long merged = 0L;
+        merged = ReportProtocol.mergeHit(merged, 5L);  // 主进程首次回传
+        merged = ReportProtocol.mergeHit(merged, 9L);  // :play 进程回传
+        merged = ReportProtocol.mergeHit(merged, 7L);  // 主进程再次回传
+        merged = ReportProtocol.mergeHit(merged, -1L); // 异常负值不覆盖
+        assertEquals("多进程 hit 只能取历史最大值", 9L, merged);
+    }
 }

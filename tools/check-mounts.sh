@@ -2,45 +2,258 @@
 # 混淆挂载点体检：小红书升级后跑这个，30 秒内知道哪些挂载点还活着。
 #
 # 用法：
-#   bash check-mounts.sh <新版apk路径> [缓存输出目录]
+#   tools/check-mounts.sh [APK路径] [--apk APK] [--dexsql PATH] [--aapt2 PATH]
 #
-# 例：
-#   bash check-mounts.sh "D:\modules\QuietBox\research\xhs950\xhs-9.50.0.apk"
+# 参数优先级：CLI > 环境变量 > 常见安装路径。
+# 环境变量：
+#   TARGET_APK / APK  目标 APK（小红书 9.50.0）
+#   DEXSQL            dexsql 可执行文件
+#   AAPT2             aapt2 可执行文件（可选，仅用于显示 APK versionName）
 #
-# 依赖：E:\tools\dexsql\dexsql.exe（首次会为这个 apk 建缓存，约 40 秒）
-# 注意：缓存记录了 APK 的绝对路径，移动 APK 或缓存目录后先删掉 dexsql-cache 再跑。
+# 缓存固定在 <repo>/tools/.dexsql-cache/（已在 .gitignore 中忽略）。
+# 缓存记录了 APK 路径；换 APK 会自动重建，不需要手工删缓存。
 #
 # 判定规则：
-#   OK   = 类和方法都在，且方法签名形状没变，hook 大概还能挂上
+#   OK   = 类和方法都在，hook 大概还能挂上
 #   GONE = 类不存在了（R8 改了混淆名），需要按同目录的复核报告重新定位
-#   SIG  = 类还在但方法签名变了，需要看具体差异再决定
+#   SIG  = 类还在但方法名变了，需要看具体差异再决定
 #
-# 每个条目后面是复核报告路径，里面有"如何重新定位"的线索。
+# 退出码：0 全部 OK；1 存在 GONE/SIG 或建缓存失败；2 参数/工具/APK 缺失。
 
 set -u
 
-APK="${1:-}"
-OUT="${2:-}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+CACHE_DIR="$REPO_ROOT/tools/.dexsql-cache"
 
-if [ -z "$APK" ]; then
-  echo "用法: bash check-mounts.sh <apk路径> [缓存目录]" >&2
-  exit 2
+TARGET_APK="${TARGET_APK:-${APK:-}}"
+DEXSQL="${DEXSQL:-}"
+AAPT2="${AAPT2:-}"
+POSITIONAL=""
+
+usage() {
+    cat <<'EOF'
+Usage:
+  tools/check-mounts.sh [APK_PATH] [--apk APK] [--dexsql PATH] [--aapt2 PATH]
+
+Arguments:
+  APK_PATH / --apk   目标 APK（小红书 9.50.0）；也可用 TARGET_APK / APK
+  --dexsql PATH      dexsql 可执行文件；也可用 DEXSQL
+  --aapt2 PATH       aapt2 可执行文件；也可用 AAPT2（可选，仅显示 versionName）
+  -h, --help         显示本帮助
+
+Resolution order: CLI > environment > common install paths.
+Cache: <repo>/tools/.dexsql-cache/
+EOF
+}
+
+die() {
+    echo "ERROR: $*" >&2
+    exit 2
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --apk)
+            [ $# -ge 2 ] || die "--apk needs a value"
+            TARGET_APK="$2"; shift 2 ;;
+        --apk=*)
+            TARGET_APK="${1#*=}"; shift ;;
+        --dexsql)
+            [ $# -ge 2 ] || die "--dexsql needs a value"
+            DEXSQL="$2"; shift 2 ;;
+        --dexsql=*)
+            DEXSQL="${1#*=}"; shift ;;
+        --aapt2)
+            [ $# -ge 2 ] || die "--aapt2 needs a value"
+            AAPT2="$2"; shift 2 ;;
+        --aapt2=*)
+            AAPT2="${1#*=}"; shift ;;
+        -h|--help)
+            usage; exit 0 ;;
+        -*)
+            echo "ERROR: unknown option $1" >&2
+            usage >&2
+            exit 2 ;;
+        *)
+            if [ -n "$POSITIONAL" ]; then
+                die "unexpected argument $1"
+            fi
+            POSITIONAL="$1"; shift ;;
+    esac
+done
+
+# ---- 工具定位辅助 ---------------------------------------------------------
+is_executable_file() {
+    local path="$1"
+    [ -n "$path" ] && [ -f "$path" ] || return 1
+    case "$path" in
+        *.exe|*.EXE) return 0 ;;
+    esac
+    [ -x "$path" ]
+}
+
+first_executable() {
+    local candidate
+    for candidate in "$@"; do
+        if is_executable_file "$candidate"; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# SDK 根目录：环境变量、local.properties、常见安装位置（不写死机器路径）。
+sdk_roots() {
+    local value line
+    for value in "${ANDROID_HOME:-}" "${ANDROID_SDK_ROOT:-}"; do
+        [ -n "$value" ] && printf '%s\n' "$value"
+    done
+    if [ -f "$REPO_ROOT/local.properties" ]; then
+        line="$(grep -E '^[[:space:]]*sdk\.dir[[:space:]]*=' \
+            "$REPO_ROOT/local.properties" | tail -n 1 || true)"
+        value="${line#*=}"
+        value="$(printf '%s' "$value" \
+            | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
+                  -e 's/\\\\/\\/g' -e 's/\\:/:/g')"
+        [ -n "$value" ] && printf '%s\n' "$value"
+    fi
+    printf '%s\n' \
+        "$HOME/Android/Sdk" \
+        "$HOME/Library/Android/sdk" \
+        "$HOME/AppData/Local/Android/Sdk" \
+        "/usr/lib/android-sdk" \
+        "/opt/android-sdk"
+}
+
+# ---- APK 定位 -------------------------------------------------------------
+if [ -n "$POSITIONAL" ]; then
+    TARGET_APK="$POSITIONAL"
+fi
+if [ -z "$TARGET_APK" ]; then
+    for candidate in \
+        "$PWD"/base*.apk \
+        "$HOME/Downloads"/base*.apk \
+        "$HOME/Downloads"/*xhs*.apk \
+        "$HOME/Downloads"/*xiaohongshu*.apk \
+        "$HOME/Desktop"/base*.apk; do
+        if [ -f "$candidate" ]; then
+            TARGET_APK="$candidate"
+            echo "APK (auto-detected): $TARGET_APK" >&2
+            break
+        fi
+    done
 fi
 
-DEXSQL="E:/tools/dexsql/dexsql.exe"
-if [ ! -x "$DEXSQL" ]; then
-  DEXSQL="E:\\tools\\dexsql\\dexsql.exe"
+# ---- dexsql 定位 ----------------------------------------------------------
+if [ -z "$DEXSQL" ]; then
+    if command -v dexsql >/dev/null 2>&1; then
+        DEXSQL="$(command -v dexsql)"
+    elif command -v dexsql.exe >/dev/null 2>&1; then
+        DEXSQL="$(command -v dexsql.exe)"
+    else
+        DEXSQL="$(first_executable \
+            "$REPO_ROOT/tools/dexsql/dexsql" \
+            "$REPO_ROOT/tools/dexsql/dexsql.exe" \
+            "$REPO_ROOT/tools/dexsql.exe" \
+            "$HOME/tools/dexsql/dexsql" \
+            "$HOME/tools/dexsql/dexsql.exe" \
+            "$HOME/.local/bin/dexsql" \
+            "$HOME/bin/dexsql" \
+            "/usr/local/bin/dexsql" \
+            "/opt/dexsql/dexsql" || true)"
+    fi
 fi
-[ -f "$DEXSQL" ] || { echo "找不到 dexsql: $DEXSQL" >&2; exit 2; }
 
-[ -z "$OUT" ] && OUT="$(dirname "$APK")/dexsql-cache"
-CACHE="$OUT/cache.dxc2"
-
-if [ ! -f "$CACHE" ]; then
-  echo "== 首次为该 apk 建 DexSQL 缓存（约 40 秒）..."
-  "$DEXSQL" prepare-cache --input "$APK" --output "$OUT" --trusted-input >/dev/null 2>&1
-  [ -f "$CACHE" ] || { echo "建缓存失败" >&2; exit 1; }
+# ---- aapt2 定位（可选） ---------------------------------------------------
+if [ -z "$AAPT2" ]; then
+    if command -v aapt2 >/dev/null 2>&1; then
+        AAPT2="$(command -v aapt2)"
+    else
+        while IFS= read -r sdk_root; do
+            [ -n "$sdk_root" ] || continue
+            AAPT2="$(first_executable \
+                "$sdk_root"/build-tools/*/aapt2.exe \
+                "$sdk_root"/build-tools/*/aapt2 || true)"
+            [ -n "$AAPT2" ] && break
+        done < <(sdk_roots)
+    fi
 fi
+
+# ---- 输入校验 -------------------------------------------------------------
+if [ -z "$TARGET_APK" ] || [ ! -f "$TARGET_APK" ]; then
+    echo "ERROR: APK not found: ${TARGET_APK:-<unset>}" >&2
+    echo "  Fix: pass --apk /path/to/xhs.apk, or export TARGET_APK=/path/to/xhs.apk," >&2
+    echo "       or place base*.apk in the current directory / ~/Downloads." >&2
+    exit 2
+fi
+if [ -z "$DEXSQL" ] \
+    || { ! is_executable_file "$DEXSQL" && ! command -v "$DEXSQL" >/dev/null 2>&1; }; then
+    echo "ERROR: dexsql not found: ${DEXSQL:-<unset>}" >&2
+    echo "  Fix: install dexsql and put it on PATH, or pass --dexsql /path/to/dexsql," >&2
+    echo "       or export DEXSQL=/path/to/dexsql." >&2
+    exit 2
+fi
+if [ -n "$AAPT2" ] && ! is_executable_file "$AAPT2"; then
+    echo "WARN: aapt2 is not executable: $AAPT2; skipping versionName display" >&2
+    echo "      Fix: pass --aapt2 /path/to/aapt2 or set ANDROID_HOME/ANDROID_SDK_ROOT." >&2
+    AAPT2=""
+fi
+
+echo
+echo "APK: $TARGET_APK"
+if is_executable_file "$AAPT2"; then
+    VERSION_NAME="$("$AAPT2" dump badging "$TARGET_APK" 2>/dev/null \
+        | sed -n "s/.*versionName='\([^']*\)'.*/\1/p" | head -1)"
+    if [ -n "$VERSION_NAME" ]; then
+        echo "versionName: $VERSION_NAME"
+        [ "$VERSION_NAME" = "9.50.0" ] \
+            || echo "WARN: expected 9.50.0, got $VERSION_NAME" >&2
+    else
+        echo "WARN: cannot read versionName from $TARGET_APK" >&2
+    fi
+else
+    echo "WARN: aapt2 not found; skipping versionName display" >&2
+    echo "      Fix: pass --aapt2 /path/to/aapt2, export AAPT2=..., or set ANDROID_HOME/ANDROID_SDK_ROOT."
+fi
+
+# ---- 缓存 -----------------------------------------------------------------
+# 固定缓存在仓库内，避免把 dexsql 缓存写进 APK 所在目录或系统临时目录。
+if ! mkdir -p "$CACHE_DIR"; then
+    echo "ERROR: cannot create cache dir: $CACHE_DIR" >&2
+    exit 2
+fi
+CACHE="$CACHE_DIR/cache.dxc2"
+META="$CACHE_DIR/apk.path"
+APK_ABS="$(cd "$(dirname "$TARGET_APK")" 2>/dev/null && pwd)/$(basename "$TARGET_APK")"
+
+CACHE_REUSABLE=0
+if [ -f "$CACHE" ] && [ -f "$META" ] && [ "$(cat "$META")" = "$APK_ABS" ]; then
+    CACHE_REUSABLE=1
+fi
+if [ "$CACHE_REUSABLE" -eq 0 ]; then
+    rm -rf "$CACHE_DIR"
+    mkdir -p "$CACHE_DIR" || {
+        echo "ERROR: cannot create cache dir: $CACHE_DIR" >&2
+        exit 2
+    }
+    printf '%s\n' "$APK_ABS" > "$META"
+    echo "== 首次为该 apk 建 DexSQL 缓存（约 40 秒）..."
+    if ! "$DEXSQL" prepare-cache --input "$TARGET_APK" --output "$CACHE_DIR" \
+            --trusted-input > "$CACHE_DIR/prepare.log" 2>&1; then
+        echo "ERROR: dexsql prepare-cache failed" >&2
+        sed -n '1,20p' "$CACHE_DIR/prepare.log" >&2
+        exit 1
+    fi
+    if [ ! -f "$CACHE" ]; then
+        echo "ERROR: dexsql did not create cache: $CACHE" >&2
+        sed -n '1,20p' "$CACHE_DIR/prepare.log" >&2
+        exit 1
+    fi
+fi
+echo "缓存: $CACHE"
+echo
 
 q() { "$DEXSQL" query-cache --cache-file "$CACHE" --trusted-input --sql "$1" 2>/dev/null; }
 
@@ -104,34 +317,32 @@ Ltq/h;|f|P2-1 AB 读取 getValueJustOnce|verify_p2_1
 Ltq/h;|b|P2-1 AB 读取 getValue|verify_p2_1
 Leb6/o;|l|P2-1 ConfigCenter 取值|verify_p2_1'
 
-echo
-echo "APK: $APK"
-echo "缓存: $CACHE"
-echo
 printf '%-8s %-64s %s\n' "状态" "挂载点" "功能"
 printf '%.0s-' {1..110}; echo
 
 bad=0
 while IFS='|' read -r cls mth feat rep; do
-  [ -z "$cls" ] && continue
-  cls_hit=$(q "SELECT count(*) FROM classes WHERE descriptor='$cls'" | grep -oE '^\| [0-9]+' | tr -d '| ')
-  if [ "${cls_hit:-0}" = "0" ]; then
-    printf '%-8s %-64s %s\n' "GONE" "${cls#L}" "$feat  → 报告: $rep"
-    bad=$((bad+1))
-    continue
-  fi
-  mth_hit=$(q "SELECT count(*) FROM methods WHERE class_descriptor='$cls' AND name='$mth'" | grep -oE '^\| [0-9]+' | tr -d '| ')
-  if [ "${mth_hit:-0}" = "0" ]; then
-    printf '%-8s %-64s %s\n' "SIG" "${cls#L}#$mth  (类在、方法没了)" "$feat  → 报告: $rep"
-    bad=$((bad+1))
-    continue
-  fi
-  printf '%-8s %-64s %s\n' "OK" "${cls#L}#$mth" "$feat"
+    [ -z "$cls" ] && continue
+    cls_hit=$(q "SELECT count(*) FROM classes WHERE descriptor='$cls'" \
+        | grep -oE '^\| [0-9]+' | tr -d '| ')
+    if [ "${cls_hit:-0}" = "0" ]; then
+        printf '%-8s %-64s %s\n' "GONE" "${cls#L}" "$feat  → 报告: $rep"
+        bad=$((bad+1))
+        continue
+    fi
+    mth_hit=$(q "SELECT count(*) FROM methods WHERE class_descriptor='$cls' AND name='$mth'" \
+        | grep -oE '^\| [0-9]+' | tr -d '| ')
+    if [ "${mth_hit:-0}" = "0" ]; then
+        printf '%-8s %-64s %s\n' "SIG" "${cls#L}#$mth  (类在、方法没了)" "$feat  → 报告: $rep"
+        bad=$((bad+1))
+        continue
+    fi
+    printf '%-8s %-64s %s\n' "OK" "${cls#L}#$mth" "$feat"
 done <<< "$MOUNTS"
 
 echo
 echo "OK=还在；GONE=混淆名变了，要重新定位；SIG=方法名变了，看报告里的链路。"
-echo "复核报告都在 D:\\modules\\QuietBox\\research\\agy-scratch\\ 下。"
+echo "复核报告路径见上表第四列（research/agy-scratch/，仅本地维护）。"
 
 echo
 echo "汇总：GONE/SIG = $bad"

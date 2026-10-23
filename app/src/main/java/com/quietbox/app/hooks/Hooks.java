@@ -7,6 +7,10 @@ import com.quietbox.app.Config;
 import com.quietbox.app.Feature;
 import com.quietbox.app.HookState;
 
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.EnumSet;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.github.libxposed.api.XposedModule;
@@ -22,7 +26,78 @@ public final class Hooks {
     private static volatile boolean sMountPushed;
     private static final AtomicBoolean sMountSending = new AtomicBoolean();
 
+    /** 单个 Feature 的安装动作；module/cl/config/feature 统一由 installOne 传入。 */
+    @FunctionalInterface
+    interface Installer {
+        void install(XposedModule module, ClassLoader cl, Config config, Feature feature);
+    }
+
+    /**
+     * Feature -> 安装器。只登记非 blocked Feature；blocked Feature 不在表内，
+     * installOne 会按原 switch 的行为打印 blocked 日志且不安装。
+     *
+     * 安装顺序仍由 installAll 遍历 Feature.values() 决定，与本表迭代顺序无关。
+     */
+    static final EnumMap<Feature, Installer> INSTALLERS = createInstallers();
+
     private Hooks() {
+    }
+
+    private static EnumMap<Feature, Installer> createInstallers() {
+        EnumMap<Feature, Installer> map = new EnumMap<>(Feature.class);
+
+        map.put(Feature.SPLASH_AD_SKIP,
+                (module, cl, config, f) -> SplashAdHooks.install(module, cl));
+        map.put(Feature.FEED_AD_FILTER,
+                (module, cl, config, f) -> FeedAdHooks.install(module, cl));
+        map.put(Feature.COMMENT_AD_FILTER,
+                (module, cl, config, f) -> CommentAdHooks.install(module, cl));
+        map.put(Feature.UPDATE_DIALOG_BLOCK,
+                (module, cl, config, f) -> UpdateDialogHooks.install(module, cl));
+        map.put(Feature.SCREENSHOT_DETECT_OFF,
+                (module, cl, config, f) -> ScreenShotHooks.install(module, cl));
+        map.put(Feature.EXT_APP_BLOCK,
+                (module, cl, config, f) -> ExtAppHooks.install(module, cl));
+        map.put(Feature.COPY_LINK_SANITIZE,
+                (module, cl, config, f) -> CopyLinkHooks.install(
+                        module, cl, config.stripXsecToken()));
+        map.put(Feature.WATERMARK_POLICY,
+                (module, cl, config, f) -> WatermarkHooks.install(module, cl));
+        map.put(Feature.AUTOPLAY_PREFERENCE,
+                (module, cl, config, f) -> AutoPlayHooks.install(module, cl));
+        map.put(Feature.SEARCH_AD_FILTER,
+                (module, cl, config, f) -> SearchAdHooks.install(module, cl));
+        map.put(Feature.NOTE_DETAIL_AD_BANNER,
+                (module, cl, config, f) -> NoteDetailAdHooks.install(module, cl));
+        map.put(Feature.NOTE_UNAVAILABLE_VIEW,
+                (module, cl, config, f) -> NoteUnavailableHooks.install(module, cl));
+        map.put(Feature.SCORE_GUIDE_BLOCK,
+                (module, cl, config, f) -> ScoreGuideHooks.install(module, cl));
+        map.put(Feature.PUSH_GUIDE_BLOCK,
+                (module, cl, config, f) -> PushGuideHooks.install(module, cl));
+        map.put(Feature.CONTENT_RATING_BLOCK,
+                (module, cl, config, f) -> ContentRatingHooks.install(module, cl));
+        map.put(Feature.CONTACT_SYNC_OFF,
+                (module, cl, config, f) -> ContactSyncHooks.install(module, cl));
+        map.put(Feature.GOODS_COMMENT_BLOCK,
+                (module, cl, config, f) -> GoodsCommentHooks.install(module, cl));
+        map.put(Feature.FEED_LIVE_CARD_BLOCK,
+                (module, cl, config, f) -> FeedCardHooks.install(module, cl, config));
+        map.put(Feature.FEED_GOODS_CARD_BLOCK,
+                (module, cl, config, f) -> FeedCardHooks.install(module, cl, config));
+        map.put(Feature.FEED_VOTE_CARD_BLOCK,
+                (module, cl, config, f) -> FeedCardHooks.install(module, cl, config));
+        map.put(Feature.AB_TEST_PANEL,
+                (module, cl, config, f) -> AbTestHooks.install(module, cl));
+
+        return map;
+    }
+
+    /** 注册表键快照，供单测断言「非 blocked 全覆盖、blocked 不安装」。 */
+    static Set<Feature> installerKeys() {
+        EnumSet<Feature> keys = EnumSet.noneOf(Feature.class);
+        keys.addAll(INSTALLERS.keySet());
+        return Collections.unmodifiableSet(keys);
     }
 
     /**
@@ -135,69 +210,16 @@ public final class Hooks {
 
     private static void installOne(XposedModule module, ClassLoader cl, Feature f, Config config) {
         try {
-            switch (f) {
-                case SPLASH_AD_SKIP:
-                    SplashAdHooks.install(module, cl);
-                    break;
-                case FEED_AD_FILTER:
-                    FeedAdHooks.install(module, cl);
-                    break;
-                case COMMENT_AD_FILTER:
-                    CommentAdHooks.install(module, cl);
-                    break;
-                case UPDATE_DIALOG_BLOCK:
-                    UpdateDialogHooks.install(module, cl);
-                    break;
-                case SCREENSHOT_DETECT_OFF:
-                    ScreenShotHooks.install(module, cl);
-                    break;
-                case EXT_APP_BLOCK:
-                    ExtAppHooks.install(module, cl);
-                    break;
-                case COPY_LINK_SANITIZE:
-                    CopyLinkHooks.install(module, cl, config.stripXsecToken());
-                    break;
-                case WATERMARK_POLICY:
-                    WatermarkHooks.install(module, cl);
-                    break;
-                case AUTOPLAY_PREFERENCE:
-                    AutoPlayHooks.install(module, cl);
-                    break;
-                case SEARCH_AD_FILTER:
-                    SearchAdHooks.install(module, cl);
-                    break;
-                case NOTE_DETAIL_AD_BANNER:
-                    NoteDetailAdHooks.install(module, cl);
-                    break;
-                case NOTE_UNAVAILABLE_VIEW:
-                    NoteUnavailableHooks.install(module, cl);
-                    break;
-                case SCORE_GUIDE_BLOCK:
-                    ScoreGuideHooks.install(module, cl);
-                    break;
-                case PUSH_GUIDE_BLOCK:
-                    PushGuideHooks.install(module, cl);
-                    break;
-                case CONTENT_RATING_BLOCK:
-                    ContentRatingHooks.install(module, cl);
-                    break;
-                case CONTACT_SYNC_OFF:
-                    ContactSyncHooks.install(module, cl);
-                    break;
-                case GOODS_COMMENT_BLOCK:
-                    GoodsCommentHooks.install(module, cl);
-                    break;
-                case FEED_LIVE_CARD_BLOCK:
-                case FEED_GOODS_CARD_BLOCK:
-                case FEED_VOTE_CARD_BLOCK:
-                    FeedCardHooks.install(module, cl, config);
-                    break;
-                case AB_TEST_PANEL:
-                    AbTestHooks.install(module, cl);
-                    break;
-                default:
-                    break;
+            Installer installer = INSTALLERS.get(f);
+            if (installer == null) {
+                if (f.blocked()) {
+                    module.log(Log.INFO, TAG, f.id + " blocked: " + f.blockedReason);
+                } else {
+                    module.log(Log.INFO, TAG, f.id + " pending implementation in later phase");
+                }
+                return;
             }
+            installer.install(module, cl, config, f);
         } catch (Throwable t) {
             module.log(Log.ERROR, TAG, f.id + " install threw", t);
             HookState.markNotFound(f, "安装异常");

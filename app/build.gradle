@@ -1,5 +1,6 @@
 plugins {
     id 'com.android.application'
+    id 'jacoco'
 }
 
 // 签名配置从 keystore.properties 读（该文件在 .gitignore 里，不入仓库）。
@@ -95,6 +96,45 @@ dependencies {
     // Config 的公开方法签名引用 XposedModule；主源码 compileOnly 在单测运行期不可见，
     // 这里补同一坐标（不新增新库）。
     testImplementation 'io.github.libxposed:api:102.0.0'
+}
+
+// ---------------------------------------------------------------- JaCoCo
+// 只生成覆盖率报告，不设阈值、不阻断构建；数据源固定为 testDebugUnitTest。
+// 输出：app/build/reports/jacoco/jacocoTestReport/{html,jacocoTestReport.xml}
+tasks.register('jacocoTestReport', JacocoReport) {
+    dependsOn 'testDebugUnitTest'
+    group = 'verification'
+    description = 'Generates HTML/XML JaCoCo reports from debug unit tests.'
+
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+        xml.outputLocation = layout.buildDirectory.file(
+                'reports/jacoco/jacocoTestReport/jacocoTestReport.xml')
+        html.outputLocation = layout.buildDirectory.dir(
+                'reports/jacoco/jacocoTestReport/html')
+    }
+
+    def debugClassesDir = layout.buildDirectory.dir('intermediates/javac/debug').get().asFile
+    def jacocoDir = layout.buildDirectory.dir('jacoco').get().asFile
+    def coverageDir = layout.buildDirectory.dir(
+            'outputs/unit_test_code_coverage/debugUnitTest').get().asFile
+
+    classDirectories.setFrom(files(fileTree(
+            dir: debugClassesDir,
+            includes: ['**/*.class'],
+            excludes: [
+                    '**/R.class',
+                    '**/R$*.class',
+                    '**/BuildConfig.class',
+            ])))
+    sourceDirectories.setFrom(files('src/main/java'))
+    // AGP + jacoco 插件默认把 testDebugUnitTest 数据写到 build/jacoco/；
+    // 开启 enableUnitTestCoverage 的工程则落在 outputs/unit_test_code_coverage/。两处都收。
+    executionData.setFrom(files(
+            fileTree(dir: jacocoDir, includes: ['testDebugUnitTest.exec']),
+            fileTree(dir: coverageDir, includes: ['*.exec'])))
 }
 
 // release 必须使用正式签名：keystore.properties 缺失 / storeFile 未配置时，

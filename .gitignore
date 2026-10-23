@@ -26,5 +26,8 @@ Thumbs.db
 *.log
 captures/
 
+# check-mounts.sh 的 DexSQL 缓存（固定写仓库内，不入库）
+tools/.dexsql-cache/
+
 # 维护文档（仅本地保存，不入库）
 docs/
