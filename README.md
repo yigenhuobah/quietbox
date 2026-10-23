@@ -163,7 +163,7 @@ gradlew assembleRelease    # 正式包，产物名 quietbox-<版本>.apk
 
 release 读取仓库根目录的 `keystore.properties` 签名（该文件不入库）。缺失或 `storeFile` 未配置时，release 任务在执行前直接失败，不会回退 debug 签名，也不会产出未签名包。
 
-工具链：Gradle 8.13（wrapper） · AGP 8.13.2 · compileSdk 37 · minSdk 29 · Java 17。
+工具链：Gradle 8.13（wrapper） · AGP 8.13.2 · compileSdk 37 · minSdk 29 · JDK 21（构建）；字节码 source/target 仍为 17。
 首次构建需要自己提供 `local.properties`（`sdk.dir=<SDK 路径>`）。
 
 ## 许可证

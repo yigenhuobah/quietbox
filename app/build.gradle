@@ -88,8 +88,8 @@ dependencies {
     implementation 'io.github.libxposed:service:102.0.0'
 
     // UI 只在模块 App 进程用；hook 代码绝不引用这些类，所以不会影响宿主进程。
-    implementation 'androidx.appcompat:appcompat:1.7.0'
-    implementation 'com.google.android.material:material:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.8.0'
+    implementation 'com.google.android.material:material:1.14.0'
     implementation 'androidx.preference:preference:1.2.1'
 
     testImplementation 'junit:junit:4.13.2'
