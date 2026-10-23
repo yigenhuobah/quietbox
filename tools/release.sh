@@ -243,7 +243,7 @@ sync_official_repo() {
         return
     fi
     local official_tag="${VERSION_CODE}-${VERSION}"
-    local work_dir dl_dir apk_name local_sha remote_sha attempt
+    local work_dir dl_dir apk_name local_sha remote_sha attempt stale_apks
 
     if [ "$DRY_RUN" -eq 1 ]; then
         printf '[dry-run] clone %s 到临时目录\n' "$OFFICIAL_REPO"
@@ -263,6 +263,16 @@ sync_official_repo() {
     fi
 
     [ -f "$work_dir/SUMMARY" ] || warn "官方仓没有 SUMMARY（脚本不会创建/删除它）"
+
+    # 官方仓根目录若还跟踪着旧版 APK（如 quietbox-0.6.0.apk），先 git rm 再提交新资产，
+    # 避免仓里同时躺着多个版本的 APK。只删 APK 文件，SUMMARY/README 等一律不动。
+    stale_apks="$(git -C "$work_dir" ls-files -- '*.apk')"
+    if [ -n "$stale_apks" ]; then
+        log "官方仓移除旧 APK：$(printf '%s' "$stale_apks" | tr '\n' ' ')"
+        # shellcheck disable=SC2086
+        git -C "$work_dir" rm -q --ignore-unmatch $stale_apks
+    fi
+
     apk_name="$(basename "$APK")"
     cp "$ROOT_DIR/README.md" "$work_dir/README.md"
     cp "$APK" "$work_dir/$apk_name"

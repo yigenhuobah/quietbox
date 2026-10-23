@@ -257,71 +257,73 @@ echo
 
 q() { "$DEXSQL" query-cache --cache-file "$CACHE" --trusted-input --sql "$1" 2>/dev/null; }
 
-# 挂载点清单：类描述符|方法名|功能|复核报告
-MOUNTS='Lcom/xingin/advert/spi/AdsIndexSpiImp;|openLCBSplashAdsV2|P0-1 内嵌开屏|splash_ad_path
-Lcom/xingin/advert/spi/AdsIndexSpiImp;|openLCBRedSplashAdsV2|P0-1 红开屏|splash_ad_path
-Lcom/xingin/advert/spi/AdsIndexSpiImp;|openLCBBrandMaxSplashAds|P0-1 品牌开屏|splash_ad_path
-Lcom/xingin/advert/spi/AdsIndexSpiImp;|openBrandMax|P0-1 品牌开屏|splash_ad_path
-Lcom/xingin/advert/spi/AdsIndexSpiImp;|openNeedLazyHFSplashAds|P0-1 懒加载开屏|splash_ad_path
-Lcom/xingin/advert/spi/AdsIndexSpiImp;|startAnim|P0-1 开屏动画|splash_ad_path
-Lcom/xingin/advert/spi/AdsIndexSpiImp;|canLazyOpenSplash|P0-1 开屏决策|splash_ad_path
-Lcom/xingin/advert/spi/AdsIndexSpiImp;|canNeedNewCloser|P0-1 开屏决策|splash_ad_path
-Lcom/xingin/advert/intersitial/ui/a;|d|P0-1 全屏开屏出口|splash_ad_path
-Lcom/xingin/advert/intersitial/ui2/view/SplashAdActivity$a;|a|P0-1 全屏开屏兜底|splash_ad_path
-Lcom/xingin/advert/intersitial/ui2/view/dynamic/SplashDynamicActivity$a;|a|P0-1 动态开屏兜底|splash_ad_path
-Lcom/xingin/advert/intersitial/ui2/cny/SplashCNYActivity$a;|a|P0-1 CNY 开屏兜底|splash_ad_path
-Lcom/xingin/advert/intersitial/ui/InterstitialAdsActivity$a;|a|P0-1 插屏开屏兜底|splash_ad_path
-Lcom/xingin/advert/intersitial/ui/SplashAdPlaceHolderView;|onCreateView|P0-1 冷启动占位|splash_ad_path
-Lcom/xingin/advert/spi/AdsHomeFeedManagerServiceImpl;|handleFeedDataIfNeed|P0-2 2-pos 比对|verify_p0_2
-Lcom/xingin/advert/spi/AdsHomeFeedManagerServiceImpl;|recordAdsNoteData|P0-2 2-pos 记录|verify_p0_2
-Ll8d/m0;|e0|P0-2 广告插入守卫|verify_p0_2
-Ll8d/m0;|Q|P0-2 列表追加过滤|verify_p0_2
-Ll8d/m0;|A0|P0-2 列表刷新过滤|verify_p0_2
-Lg8d/s;|Yd|P0-2 分页上游过滤|verify_p0_2
-Lcom/xingin/advert/spi/AdsCommentComponentBinderCreatorImpl;|commentAdvertComponentDSLEnable|P0-3 评论广告|specs
-Lcom/xingin/update/UpdateDialogActivity;|onCreate|P0-4 更新弹窗|specs
-Lcom/xingin/update/UpdateDialogActivity;|he|P0-4 更新弹窗补充|specs
-Lcom/xingin/advert/spi/AdvertSpiImpl;|gotoExtApp|P1-7 外跳主挂|verify_p1_7
-Lk1e/i0;|b|P1-7 外跳汇聚|verify_p1_7
-Lu0b/e;|b|P1-9 剪贴板写入|verify_p1_9
-Lo92/q;|a|P1-9 复制链接收口|verify_p1_9
-Lce8/j;|a|P1-11 水印主挂|verify_watermark
-Lce8/i;|i|P1-11 水印入口|verify_watermark
-Lcom/xingin/entities/MediaSaveConfig;|c|P1-11 语义 getter|verify_watermark
-Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateHelper;|isAutoPlayOpen|P1-12 自动播放|specs
-Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateHelper;|isAutoPlayOpenServer|P1-12 自动播放|specs
-Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateTabHelper;|isAutoPlayOpen|P1-12 自动播放|specs
-Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateTabHelper;|isAutoPlayOpenServer|P1-12 自动播放|specs
-Lhl0/f0;|o|P1-13 搜索广告|verify_p1_13
-Lcom/xingin/matrix/notedetail/asyncwidgets/advert/AdvertV2View;|a|P1-14 详情广告条|verify_p1_14
-Lcom/xingin/matrix/notedetail/asyncwidgets/advert/AdvertV2View;|b|P1-14 详情广告条|verify_p1_14
-Lsr9/o;|invoke|P1-15 已删除笔记查看|verify_p1_15
-Lcom/xingin/lurker/appscore/ui/AppScoreDialogActivity;|onCreate|P1-16 评分弹窗|verify_p1_16
-Lcom/xingin/xhs/app/ShareApplication;|tryLaunchGpReview|P1-16 系统评分|verify_p1_16
-Lcom/xingin/spi/IGrowthCupidProxyImpl;|pushGuideDialogDialogShow|P1-17 通知引导|verify_p1_17
-Lcom/xingin/spi/IGrowthCupidProxyImpl;|showGuidePopupWindow|P1-17 通知引导|verify_p1_17
-Lcom/xingin/spi/IGrowthCupidProxyImpl;|showPushGuidShowForInside|P1-17 通知引导|verify_p1_17
-Lcom/xingin/spi/IGrowthCupidProxyImpl;|openPushGuideActivity|P1-17 通知引导|verify_p1_17
-Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|shouldShowInternal|P1-18 满意度调研|verify_p1_18
-Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|showForVideo|P1-18 满意度兜底|verify_p1_18
-Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|showForImageText|P1-18 满意度兜底|verify_p1_18
-Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|showContentRatingSnackBarIfNeeded|P1-18 满意度公开入口|verify_p1_18
-Lcom/xingin/login/manager/UploadContactServiceExtension;|start|P1-19 通讯录同步|verify_p1_19
-Lcom/xingin/login/manager/UploadContactServiceExtension;|requestContactsSync|P1-19 通讯录同步|verify_p1_19
-Lcom/xingin/login/manager/UploadContactServiceExtension;|installLifecycleObserver|P1-19 通讯录同步|verify_p1_19
-Lcom/xingin/commercial/vision/post/spi/GoodsCommentAddInProcessor;|startAddIn|P1-20 评论带货|verify_p1_20
-Ll8d/m0;|Q|P1-21/22/23 直播/带货/投票卡过滤|verify_p1_21
-Ll8d/m0;|A0|P1-21/22/23 直播/带货/投票卡过滤|verify_p1_21
-Lg8d/s;|Yd|P1-21/22/23 直播/带货/投票卡过滤|verify_p1_21
-Ltq/h;|f|P2-1 AB 读取 getValueJustOnce|verify_p2_1
-Ltq/h;|b|P2-1 AB 读取 getValue|verify_p2_1
-Lmb6/o;|l|P2-1 ConfigCenter 取值|verify_p2_1'
+# 挂载点清单：类描述符|方法名|功能|复核报告|参数个数（可选，空=不校验）
+# 第 5 列填了数字时，用 methods 表的 param_count 做"签名形状"校验：
+# 方法还在但参数个数变了 → SIG。没有数据的条目留空，不做该层校验。
+MOUNTS='Lcom/xingin/advert/spi/AdsIndexSpiImp;|openLCBSplashAdsV2|P0-1 内嵌开屏|splash_ad_path|
+Lcom/xingin/advert/spi/AdsIndexSpiImp;|openLCBRedSplashAdsV2|P0-1 红开屏|splash_ad_path|
+Lcom/xingin/advert/spi/AdsIndexSpiImp;|openLCBBrandMaxSplashAds|P0-1 品牌开屏|splash_ad_path|
+Lcom/xingin/advert/spi/AdsIndexSpiImp;|openBrandMax|P0-1 品牌开屏|splash_ad_path|
+Lcom/xingin/advert/spi/AdsIndexSpiImp;|openNeedLazyHFSplashAds|P0-1 懒加载开屏|splash_ad_path|
+Lcom/xingin/advert/spi/AdsIndexSpiImp;|startAnim|P0-1 开屏动画|splash_ad_path|
+Lcom/xingin/advert/spi/AdsIndexSpiImp;|canLazyOpenSplash|P0-1 开屏决策|splash_ad_path|
+Lcom/xingin/advert/spi/AdsIndexSpiImp;|canNeedNewCloser|P0-1 开屏决策|splash_ad_path|
+Lcom/xingin/advert/intersitial/ui/a;|d|P0-1 全屏开屏出口|splash_ad_path|
+Lcom/xingin/advert/intersitial/ui2/view/SplashAdActivity$a;|a|P0-1 全屏开屏兜底|splash_ad_path|
+Lcom/xingin/advert/intersitial/ui2/view/dynamic/SplashDynamicActivity$a;|a|P0-1 动态开屏兜底|splash_ad_path|
+Lcom/xingin/advert/intersitial/ui2/cny/SplashCNYActivity$a;|a|P0-1 CNY 开屏兜底|splash_ad_path|
+Lcom/xingin/advert/intersitial/ui/InterstitialAdsActivity$a;|a|P0-1 插屏开屏兜底|splash_ad_path|
+Lcom/xingin/advert/intersitial/ui/SplashAdPlaceHolderView;|onCreateView|P0-1 冷启动占位|splash_ad_path|
+Lcom/xingin/advert/spi/AdsHomeFeedManagerServiceImpl;|handleFeedDataIfNeed|P0-2 2-pos 比对|verify_p0_2|
+Lcom/xingin/advert/spi/AdsHomeFeedManagerServiceImpl;|recordAdsNoteData|P0-2 2-pos 记录|verify_p0_2|
+Ll8d/m0;|e0|P0-2 广告插入守卫|verify_p0_2|
+Ll8d/m0;|Q|P0-2 列表追加过滤|verify_p0_2|
+Ll8d/m0;|A0|P0-2 列表刷新过滤|verify_p0_2|
+Lg8d/s;|Yd|P0-2 分页上游过滤|verify_p0_2|
+Lcom/xingin/advert/spi/AdsCommentComponentBinderCreatorImpl;|commentAdvertComponentDSLEnable|P0-3 评论广告|specs|
+Lcom/xingin/update/UpdateDialogActivity;|onCreate|P0-4 更新弹窗|specs|
+Lcom/xingin/update/UpdateDialogActivity;|he|P0-4 更新弹窗补充|specs|
+Lcom/xingin/advert/spi/AdvertSpiImpl;|gotoExtApp|P1-7 外跳主挂|verify_p1_7|
+Lk1e/i0;|b|P1-7 外跳汇聚|verify_p1_7|
+Lu0b/e;|b|P1-9 剪贴板写入|verify_p1_9|
+Lo92/q;|a|P1-9 复制链接收口|verify_p1_9|
+Lce8/j;|a|P1-11 水印主挂|verify_watermark|6
+Lce8/i;|i|P1-11 水印入口|verify_watermark|11
+Lcom/xingin/entities/MediaSaveConfig;|c|P1-11 语义 getter|verify_watermark|
+Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateHelper;|isAutoPlayOpen|P1-12 自动播放|specs|
+Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateHelper;|isAutoPlayOpenServer|P1-12 自动播放|specs|
+Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateTabHelper;|isAutoPlayOpen|P1-12 自动播放|specs|
+Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateTabHelper;|isAutoPlayOpenServer|P1-12 自动播放|specs|
+Lhl0/f0;|o|P1-13 搜索广告|verify_p1_13|
+Lcom/xingin/matrix/notedetail/asyncwidgets/advert/AdvertV2View;|a|P1-14 详情广告条|verify_p1_14|
+Lcom/xingin/matrix/notedetail/asyncwidgets/advert/AdvertV2View;|b|P1-14 详情广告条|verify_p1_14|
+Lsr9/o;|invoke|P1-15 已删除笔记查看|verify_p1_15|
+Lcom/xingin/lurker/appscore/ui/AppScoreDialogActivity;|onCreate|P1-16 评分弹窗|verify_p1_16|
+Lcom/xingin/xhs/app/ShareApplication;|tryLaunchGpReview|P1-16 系统评分|verify_p1_16|
+Lcom/xingin/spi/IGrowthCupidProxyImpl;|pushGuideDialogDialogShow|P1-17 通知引导|verify_p1_17|
+Lcom/xingin/spi/IGrowthCupidProxyImpl;|showGuidePopupWindow|P1-17 通知引导|verify_p1_17|
+Lcom/xingin/spi/IGrowthCupidProxyImpl;|showPushGuidShowForInside|P1-17 通知引导|verify_p1_17|
+Lcom/xingin/spi/IGrowthCupidProxyImpl;|openPushGuideActivity|P1-17 通知引导|verify_p1_17|
+Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|shouldShowInternal|P1-18 满意度调研|verify_p1_18|
+Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|showForVideo|P1-18 满意度兜底|verify_p1_18|
+Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|showForImageText|P1-18 满意度兜底|verify_p1_18|
+Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|showContentRatingSnackBarIfNeeded|P1-18 满意度公开入口|verify_p1_18|
+Lcom/xingin/login/manager/UploadContactServiceExtension;|start|P1-19 通讯录同步|verify_p1_19|
+Lcom/xingin/login/manager/UploadContactServiceExtension;|requestContactsSync|P1-19 通讯录同步|verify_p1_19|
+Lcom/xingin/login/manager/UploadContactServiceExtension;|installLifecycleObserver|P1-19 通讯录同步|verify_p1_19|
+Lcom/xingin/commercial/vision/post/spi/GoodsCommentAddInProcessor;|startAddIn|P1-20 评论带货|verify_p1_20|
+Ll8d/m0;|Q|P1-21/22/23 直播/带货/投票卡过滤|verify_p1_21|
+Ll8d/m0;|A0|P1-21/22/23 直播/带货/投票卡过滤|verify_p1_21|
+Lg8d/s;|Yd|P1-21/22/23 直播/带货/投票卡过滤|verify_p1_21|
+Ltq/h;|f|P2-1 AB 读取 getValueJustOnce|verify_p2_1|
+Ltq/h;|b|P2-1 AB 读取 getValue|verify_p2_1|
+Lmb6/o;|l|P2-1 ConfigCenter 取值|verify_p2_1|'
 
 printf '%-8s %-64s %s\n' "状态" "挂载点" "功能"
 printf '%.0s-' {1..110}; echo
 
 bad=0
-while IFS='|' read -r cls mth feat rep; do
+while IFS='|' read -r cls mth feat rep pc; do
     [ -z "$cls" ] && continue
     cls_hit=$(q "SELECT count(*) FROM classes WHERE descriptor='$cls'" \
         | grep -oE '^\| [0-9]+' | tr -d '| ')
@@ -336,6 +338,20 @@ while IFS='|' read -r cls mth feat rep; do
         printf '%-8s %-64s %s\n' "SIG" "${cls#L}#$mth  (类在、方法没了)" "$feat  → 报告: $rep"
         bad=$((bad+1))
         continue
+    fi
+    # 可选第 5 列：填了数字就做参数个数校验（同名重载任一匹配即可）。
+    if [ -n "$pc" ]; then
+        pc_hit=$(q "SELECT count(*) FROM methods WHERE class_descriptor='$cls' AND name='$mth' AND param_count=$pc" \
+            | grep -oE '^\| [0-9]+' | tr -d '| ')
+        if [ "${pc_hit:-0}" = "0" ]; then
+            actual_pc=$(q "SELECT DISTINCT param_count FROM methods WHERE class_descriptor='$cls' AND name='$mth'" \
+                | grep -oE '[0-9]+' | paste -sd, -)
+            printf '%-8s %-64s %s\n' "SIG" \
+                "${cls#L}#$mth  (参数个数变了，期望 $pc，实际 ${actual_pc:-?})" \
+                "$feat  → 报告: $rep"
+            bad=$((bad+1))
+            continue
+        fi
     fi
     printf '%-8s %-64s %s\n' "OK" "${cls#L}#$mth" "$feat"
 done <<< "$MOUNTS"

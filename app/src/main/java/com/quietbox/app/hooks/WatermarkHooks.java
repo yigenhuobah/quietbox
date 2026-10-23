@@ -27,8 +27,9 @@ import io.github.libxposed.api.XposedModule;
  *        if (!disableWaterMark && watermark != null) canvas.drawBitmap(watermark, ...)
  * </pre>
  *
- * <p>9.51.0 新增 13 参重载 ce8.i.g（多一个权限/提示布尔），它内部仍委托到 12 参的
- * ce8.i.i，所以只挂 i 即可覆盖两条入口。
+ * <p>9.51.0 另有 12 参重载 ce8.i.g（多一个布尔），它内部仍委托到 11 参的
+ * ce8.i.i，所以只挂 i 即可覆盖两条入口。11 参形状与各布尔位的语义证据见
+ * {@link #applyWatermarkFlags}。
  *
  * <p>此前 5 次尝试全部失败的原因：a27/s、cp6/r、DotsImageSaveHelper 属于
  * {@code com.xingin.dots.*}（点点/AI 助手），与笔记图片库保存是两套代码；
@@ -46,7 +47,7 @@ final class WatermarkHooks {
      */
     private static final String COMPOSE_CLAZZ = "ce8.j";
 
-    /** 保存入口：i(... Z disableWaterMark ... ZZZ)。9.50.0 为 nd8.i#g。 */
+    /** 保存入口：i(Activity, String×4, Z, F1, F1, Z, Z, Z) 共 11 参。9.50.0 为 nd8.i#g。 */
     private static final String SAVE_CLAZZ = "ce8.i";
 
     /** 语义 getter：MediaSaveConfig.c() -> disableWaterMark。 */
@@ -117,8 +118,44 @@ final class WatermarkHooks {
     }
 
     /**
+     * 入口侧改参逻辑，抽成纯静态方法以便 JVM 单测（WatermarkHooksTest）。
+     *
+     * <p>ce8.i#i 是 11 参：{@code (Activity, String, String, String, String, Z,
+     * Function1, Function1, Z, Z, Z)}，布尔位在 index 5、8、9、10。
+     * dexsql 对 9.51.0（classes6.dex）反汇编的结论：
+     * <ul>
+     *   <li>index 5 → disableWaterMark：两条路径都传入 ce8.d 的字段 m，
+     *       subscribe 里既做 fail-open 守卫
+     *       {@code if (!m && watermark == null) fail(-4 "save image failed without watermark")}，
+     *       又作为 ce8.j#a 第 5 参（true 时跳过主水印 drawBitmap）。</li>
+     *   <li>index 10 → disableAiWaterMark：传入 ce8.d 的字段 o，
+     *       subscribe 里以 {@code o && ce8.i#b()} 作为 ce8.j#a 第 6 参
+     *       （方法体首行日志 "disableAiWaterMark is ..."，true 时跳过 AI 水印 drawBitmap）。</li>
+     *   <li>index 8 → 仅在位图为空的兜底路径传入 ce8.h.p → ce8.e，是"存入相册
+     *       (MediaStore DCIM)"的副作用开关，与水印绘制无关，不设。</li>
+     *   <li>index 9 → 传入 ce8.d 的字段 i，作为 ce8.j#c(Context,String,Z) /
+     *       ce8.j#b(Context,Z) 取图的布尔参数（缓存/强制类开关），不设。</li>
+     * </ul>
+     *
+     * <p>只设置有证据的两个位；其余长度（如 9.50.0 的 12 参 nd8.i#g 形状或未来
+     * 重载）返回 null，由调用方走原参 proceed，不做猜测。
+     *
+     * @return 置位后的新数组；长度非 11 返回 null
+     */
+    @Nullable
+    static Object[] applyWatermarkFlags(Object[] args) {
+        if (args == null || args.length != 11) {
+            return null;
+        }
+        Object[] replaced = args.clone();
+        replaced[5] = Boolean.TRUE;    // disableWaterMark
+        replaced[10] = Boolean.TRUE;   // disableAiWaterMark
+        return replaced;
+    }
+
+    /**
      * i(Activity, String, String, String, String, boolean, Function1, Function1,
-     * boolean, boolean, boolean)：12 参，后半是混淆/Kotlin 函数类型，
+     * boolean, boolean, boolean)：11 参，后半是混淆/Kotlin 函数类型，
      * 编译期写不全参数类型，所以只校验前导参数（Activity + 4 个 String）定位。
      * 不能用无参 findMethodQuiet：那等价于 getDeclaredMethod("i")，永远匹配不到这个重载。
      * 9.50.0 该方法是 nd8.i.g，9.51.0 改名为 ce8.i.i。
@@ -138,11 +175,7 @@ final class WatermarkHooks {
                         try {
                             HookKit.hit(module, f, "ce8.i#i");
                             List<Object> args = chain.getArgs();
-                            if (args.size() >= 12) {
-                                replaced = args.toArray();
-                                replaced[5] = Boolean.TRUE;   // disableWaterMark
-                                replaced[11] = Boolean.TRUE;  // disableAiWaterMark
-                            }
+                            replaced = applyWatermarkFlags(args.toArray());
                         } catch (Throwable t) {
                             HookKit.error(module, f.id + " intercept error ce8.i#i", t);
                         }

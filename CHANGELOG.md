@@ -1,5 +1,32 @@
 # 更新日志
 
+## v0.8.0 — 2026-10-24
+
+适配小红书 9.51.0；界面改为底栏 4 Tab；修复保存图片水印入口参数不生效的问题。
+
+### 新增
+
+- 底栏 4 Tab：设置 / 测试 / 诊断 / 关于；原二级页改为平级 Tab，AB 面板并入测试 Tab。
+- `tools/release.sh`、`tools/verify-apk.sh`、`tools/preflight.sh` 发布与校验脚本；CI 流水线。
+- `tools/check-mounts.sh` 挂载点体检：锚点表新增可选第 5 列参数个数校验（方法还在但签名形状变了判 SIG）。
+- 新增测试：prefs/Feature 一致性（`PrefsFeatureConsistencyTest`）、hook 注册表（`HookRegistryTest`）、水印入口参数（`WatermarkHooksTest`）等，单测 28 → 49 项；接入 JaCoCo 覆盖率报告（不设阈值）。
+
+### 变更
+
+- 适配小红书 9.51.0：15 个锚点重定位（旧编号 P0-2 信息流、P1-7 外跳、P1-9 复制链接/剪贴板、P1-11 水印、P1-13 搜索广告、P1-15 已删笔记、P1-21/22/23 卡片过滤、P2-1 ConfigCenter）；旧版本 fail-open 并提示。
+- 水印入口修复：9.51.0 保存入口为 11 参 `ce8.i#i`（布尔位 index 5/8/9/10），此前按 `>=12` 判断且写 index 11，改参永不生效；dexsql 反汇编确认 index 5 = disableWaterMark、index 10 = disableAiWaterMark，其余布尔位与水印无关不设。改参逻辑抽为 `applyWatermarkFlags` 纯静态方法并有单测。
+- release 签名配置：`signingConfigs.release` 改为条件引用，无 keystore 的 CI 也能跑配置期与 test/lint；release 任务图仍硬失败，不产出 debug 签名或未签名包。
+- 构建基线：appcompat 1.8.0、material 1.14.0，JDK 21 构建（字节码仍 Java 17）。
+
+### 验证
+
+- `bash tools/preflight.sh`、`./gradlew :app:assembleRelease`、`bash tools/verify-apk.sh app/build/outputs/apk/release/quietbox-0.8.0.apk` 通过。
+- 单测 49 项通过。
+- 无 keystore 环境：`:app:help`、`:app:testDebugUnitTest :app:lintDebug` 通过，`:app:assembleRelease` 以「release 构建必须使用正式签名」失败。
+
+APK: quietbox-0.8.0.apk
+versionCode: 12
+
 ## v0.7.0 — 2026-10-23
 
 统一界面、诊断与功能编号。历史条目中的旧编号（P0-x / P1-x / P2-x）保留原样，仅作记录。
