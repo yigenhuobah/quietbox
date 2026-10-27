@@ -209,7 +209,7 @@ if is_executable_file "$AAPT2"; then
     if [ -n "$VERSION_NAME" ]; then
         echo "versionName: $VERSION_NAME"
         [ "$VERSION_NAME" = "9.51.0" ] \
-            || echo "WARN: expected 9.50.0, got $VERSION_NAME" >&2
+            || echo "WARN: expected 9.51.0, got $VERSION_NAME" >&2
     else
         echo "WARN: cannot read versionName from $TARGET_APK" >&2
     fi

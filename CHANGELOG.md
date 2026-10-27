@@ -18,14 +18,19 @@
 - release 签名配置：`signingConfigs.release` 改为条件引用，无 keystore 的 CI 也能跑配置期与 test/lint；release 任务图仍硬失败，不产出 debug 签名或未签名包。
 - 构建基线：appcompat 1.8.0、material 1.14.0，JDK 21 构建（字节码仍 Java 17）。
 
-### 验证
+### 验证（自动化、静态与真机，2026-10-27）
 
-- `bash tools/preflight.sh`、`./gradlew :app:assembleRelease`、`bash tools/verify-apk.sh app/build/outputs/apk/release/quietbox-0.8.0.apk` 通过。
-- 单测 49 项通过。
+- `bash tools/preflight.sh` 通过：`testDebugUnitTest` 49 项全部通过（0 失败 / 0 跳过），`lintDebug` 通过。
+- `./gradlew :app:assembleDebug :app:assembleRelease` 通过；release 产物 2,899,950 字节。
+- `bash tools/verify-apk.sh app/build/outputs/apk/release/quietbox-0.8.0.apk` 17 项检查全部通过：Xposed 元数据与 scope、单入口、R8 keep 4 类、Manifest、versionCode/versionName、签名证书、APK SHA-256。
+- 小红书 9.51.0 挂载点体检 58/58 OK（2026-10-24 对同版本 APK 的记录）。
 - 无 keystore 环境：`:app:help`、`:app:testDebugUnitTest :app:lintDebug` 通过，`:app:assembleRelease` 以「release 构建必须使用正式签名」失败。
+- 真机 25102RKBEC / Android 17 / 小红书 9.51.0：两次冷启动无 FATAL/ANR；AD-01、AD-02、AD-05、AD-08/09/10、EN-01 保存无水印图片和 4 Tab/诊断/关于均通过；模块 App 存活时 `mount report sent=true ok=21 miss=0 bad=0`。AD-04 外跳与 AD-07 评论带货本轮无自然场景，未覆盖；不据此宣称通过。
 
 APK: quietbox-0.8.0.apk
 versionCode: 12
+大小: 2,899,950 字节
+SHA-256: cb3735f88b54d8d216e80a495d0c8366e06e0cb178c81945d4dd375e3d8ed788
 
 ## v0.7.0 — 2026-10-23
 
