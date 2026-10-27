@@ -26,6 +26,7 @@
 - 小红书 9.51.0 挂载点体检 58/58 OK（2026-10-24 对同版本 APK 的记录）。
 - 无 keystore 环境：`:app:help`、`:app:testDebugUnitTest :app:lintDebug` 通过，`:app:assembleRelease` 以「release 构建必须使用正式签名」失败。
 - 真机 25102RKBEC / Android 17 / 小红书 9.51.0：两次冷启动无 FATAL/ANR；AD-01、AD-02、AD-05、AD-08/09/10、EN-01 保存无水印图片和 4 Tab/诊断/关于均通过；模块 App 存活时 `mount report sent=true ok=21 miss=0 bad=0`。AD-04 外跳与 AD-07 评论带货本轮无自然场景，未覆盖；不据此宣称通过。
+- 已知观察：真机诊断页仍显示部分 skip，模块主页出现“9 项功能未生效”横幅；核心 P0 链路不受影响，具体原因待后续排查。
 
 APK: quietbox-0.8.0.apk
 versionCode: 12
