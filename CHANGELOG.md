@@ -27,7 +27,7 @@
 APK: quietbox-0.8.1.apk
 versionCode: 13
 大小: 2,900,042 字节
-SHA-256: 40ef73b3843bc39fee934a4900852b201cbc8a50faf60340de883daccfcde479
+SHA-256: 6b763eeddc75074872392b3f9b9c14df44f0dee1efb347812f6f9f71ea550dfa
 
 ## v0.8.0 — 2026-10-24
 
