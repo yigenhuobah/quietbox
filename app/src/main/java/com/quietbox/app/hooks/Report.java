@@ -103,22 +103,25 @@ final class Report {
         }
     }
 
-    /** HookState 快照 → 平铺的 key/value（key 用 reg./hit./skip. 前缀，value 截断到 256）。 */
-    private static Map<String, String> snapshot() {
+    /**
+     * HookState 快照 → 平铺的 key/value（key 用 reg./hit./skip. 前缀，value 截断到 256）。
+     *
+     * reg 与 skip 对每个 touched Feature 都必须发送，缺失时发空串：StatusProvider 用
+     * 最新值覆盖旧值，只有空串才能清掉上一次目标进程会话遗留的 skip。否则旧 skip
+     * 会永久留在 status_report 里，让横幅按「已启用且 skip 非空」持续误报。
+     * hit 仍只在 >0 时发送，由 StatusProvider 取历史最大值，不会被空值覆盖。
+     */
+    static Map<String, String> snapshot() {
         Map<String, String> out = new TreeMap<>();
         for (Feature f : HookState.touched()) {
-            List<String> labels = HookState.labels(f);
-            if (!labels.isEmpty()) {
-                out.put(StatusProvider.PREFIX_REG + f.key, truncate(join(labels)));
-            }
+            out.put(StatusProvider.PREFIX_REG + f.key,
+                    truncate(join(HookState.labels(f))));
             long hits = HookState.hitCount(f);
             if (hits > 0) {
                 out.put(StatusProvider.PREFIX_HIT + f.key, String.valueOf(hits));
             }
-            String skip = HookState.skipReason(f);
-            if (skip != null) {
-                out.put(StatusProvider.PREFIX_SKIP + f.key, truncate(skip));
-            }
+            out.put(StatusProvider.PREFIX_SKIP + f.key,
+                    truncate(HookState.skipReason(f)));
         }
         return out;
     }

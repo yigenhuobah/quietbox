@@ -55,4 +55,34 @@ public final class ReportProtocol {
         long n = next < 0 ? 0 : next;
         return Math.max(p, n);
     }
+
+    /**
+     * reg/skip 文本合并：最新值无条件覆盖旧值，空串也覆盖。
+     *
+     * 目标进程每次启动都是新的 HookState：本次会话没有 skip 时必须发送空串，
+     * 才能清掉上一次会话落盘的旧 skip；缺失不发送会让失败横幅永久误报。
+     */
+    public static String mergeText(String prev, String next) {
+        return next;
+    }
+
+    /** 已启用功能是否有回传（reg/skip 非空或 hit > 0）。 */
+    private static boolean reported(String reg, String skip, long hit) {
+        return !isEmpty(reg) || !isEmpty(skip) || hit > 0;
+    }
+
+    /**
+     * 已启用且有回传的功能是否明确失败：reg 为空或 skip 非空。
+     * 没有回传的功能不计入，避免目标应用未启动时误报。
+     */
+    public static boolean featureFailed(String reg, String skip, long hit) {
+        if (!reported(reg, skip, hit)) {
+            return false;
+        }
+        return isEmpty(reg) || !isEmpty(skip);
+    }
+
+    private static boolean isEmpty(String s) {
+        return s == null || s.isEmpty();
+    }
 }

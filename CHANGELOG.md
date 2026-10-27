@@ -1,5 +1,34 @@
 # 更新日志
 
+## v0.8.1 — 2026-10-28
+
+修复旧会话诊断数据残留导致「N 项功能未生效」误报。
+
+### 修复
+
+- 诊断回传：`Report.snapshot` 对本次会话触碰到的每个 Feature 总是发送 `reg` 与 `skip`，缺失时发送空串。`StatusProvider` 对 `reg`/`skip` 以最新值覆盖，空串会清掉上一次目标进程会话遗留的旧 skip；`hit` 仍只在 >0 时发送并取历史最大值，不会被清空。
+- 根因：0.8.0 只在值非空时发送 `reg`/`skip`。目标应用重启后，本次没有 skip 的功能不会覆盖旧值，旧会话的 9 条 skip 永久留在 `status_report`，被 `failedFeatureCount` 持续计入，主页面一直显示「9 项功能未生效」。
+- 失败判定抽到 `ReportProtocol.featureFailed`，行为不变：已启用、有回传且（`reg` 为空或 `skip` 非空）才计入失败；无回传不计入。
+
+### 验证（自动化、静态与真机，2026-10-28）
+
+- `testDebugUnitTest` 54 项全部通过（0 失败 / 0 跳过）；新增空串覆盖旧 skip、横幅计数归零、旧 hit 保留、`Report.snapshot` 键完整性等 5 项用例。
+- `lintDebug` 通过：0 errors / 23 warnings（均为既有 warning）。
+- `assembleDebug` / `assembleRelease` 通过。
+- `tools/verify-apk.sh` 17 项全部通过：versionCode=13、versionName=0.8.1、签名证书与 APK SHA-256。
+- `tools/check-mounts.sh --dexsql E:/tools/dexsql/dexsql.exe` 对小红书 9.51.0 体检 58/58 OK，GONE/SIG=0。
+- 真机 25102RKBEC / Android 17 / 小红书 9.51.0：0.8.0 覆盖升级到 0.8.1（versionCode 13）后，冷启动两次均无 FATAL/ANR；旧 9 条 skip 被本次空串覆盖，主页面「9 项功能未生效」横幅消失，诊断页 `skip —`；`mount report sent=true ok=21 miss=0 bad=0`。核心 P0 沿用 0.8.0 已验证结果。
+
+### 已知未覆盖
+
+- AD-03/04/06/07、UI-01~05、PV-01~03、EX-01/02 未触发或未覆盖；AD-09/AD-10 具体带货/投票卡未出现，仅验证 seen 链路；EX-01 真实被删笔记场景未实测；旋转与 1.3 字体未验证。
+- 诊断页仍会显示本次会话真实存在的 skip（锚点缺失属于正常信息），横幅只统计本次会话回传。
+
+APK: quietbox-0.8.1.apk
+versionCode: 13
+大小: 2,900,042 字节
+SHA-256: 40ef73b3843bc39fee934a4900852b201cbc8a50faf60340de883daccfcde479
+
 ## v0.8.0 — 2026-10-24
 
 适配小红书 9.51.0；界面改为底栏 4 Tab；修复保存图片水印入口参数不生效的问题。

@@ -92,7 +92,10 @@ public final class StatusProvider extends ContentProvider {
                     editor.putLong(VALUE_PREFIX + key, merged);
                 }
             } else {
-                editor.putString(VALUE_PREFIX + key, value);
+                // reg/skip 以最新值覆盖（空串也覆盖）：目标进程重开后，本次没有
+                // skip 的功能会回传空串，必须清掉上一次会话遗留的旧 skip。
+                editor.putString(VALUE_PREFIX + key,
+                        ReportProtocol.mergeText(sp.getString(VALUE_PREFIX + key, null), value));
             }
             accepted++;
         }
@@ -158,13 +161,7 @@ public final class StatusProvider extends ContentProvider {
             String reg = reportString(context, PREFIX_REG, f.key);
             String skip = reportString(context, PREFIX_SKIP, f.key);
             long hit = reportHit(context, f.key);
-            boolean reported = (reg != null && !reg.isEmpty())
-                    || (skip != null && !skip.isEmpty())
-                    || hit > 0;
-            if (!reported) {
-                continue;
-            }
-            if (reg == null || reg.isEmpty() || (skip != null && !skip.isEmpty())) {
+            if (ReportProtocol.featureFailed(reg, skip, hit)) {
                 failed++;
             }
         }
