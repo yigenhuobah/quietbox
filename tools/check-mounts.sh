@@ -11,7 +11,8 @@
 #   AAPT2             aapt2 可执行文件（可选，仅用于显示 APK versionName）
 #
 # 缓存固定在 <repo>/tools/.dexsql-cache/（已在 .gitignore 中忽略）。
-# 缓存记录了 APK 路径；换 APK 会自动重建，不需要手工删缓存。
+# 缓存 META 记录 APK 路径 + 大小 + mtime + sha256；任一项不匹配（包括同路径
+# 替换 APK、旧版只有路径的 META）都会自动重建，不需要手工删缓存。
 #
 # 判定规则：
 #   OK   = 类和方法都在，hook 大概还能挂上
@@ -225,11 +226,63 @@ if ! mkdir -p "$CACHE_DIR"; then
     exit 2
 fi
 CACHE="$CACHE_DIR/cache.dxc2"
-META="$CACHE_DIR/apk.path"
+META="$CACHE_DIR/apk.meta"
 APK_ABS="$(cd "$(dirname "$TARGET_APK")" 2>/dev/null && pwd)/$(basename "$TARGET_APK")"
 
+file_size() {
+    wc -c < "$1" 2>/dev/null | tr -d '[:space:]'
+}
+file_mtime() {
+    stat -c %Y "$1" 2>/dev/null \
+        || stat -f %m "$1" 2>/dev/null \
+        || date -r "$1" +%s 2>/dev/null
+}
+sha256_of() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" 2>/dev/null | awk '{print $1}'
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "$1" 2>/dev/null | awk '{print $1}'
+    elif command -v openssl >/dev/null 2>&1; then
+        openssl dgst -sha256 "$1" 2>/dev/null | awk '{print $NF}'
+    fi
+}
+
+APK_SIZE="$(file_size "$TARGET_APK")"
+APK_MTIME="$(file_mtime "$TARGET_APK")"
+APK_SHA="$(sha256_of "$TARGET_APK" || true)"
+
+meta_value() {
+    [ -f "$META" ] || return 1
+    sed -n "s/^$1=//p" "$META" | head -1
+}
+meta_matches() {
+    [ -f "$META" ] || return 1
+    [ "$(meta_value path)" = "$APK_ABS" ] || return 1
+    [ "$(meta_value size)" = "$APK_SIZE" ] || return 1
+    if [ -n "$APK_SHA" ]; then
+        [ "$(meta_value sha256)" = "$APK_SHA" ] || return 1
+    else
+        # 没有 sha256 工具时退回 size + mtime；mtime 取不到就强制重建。
+        [ -n "$APK_MTIME" ] || return 1
+        [ "$(meta_value mtime)" = "$APK_MTIME" ] || return 1
+    fi
+    return 0
+}
+write_meta() {
+    local tmp="$META.tmp"
+    {
+        printf 'version=2\n'
+        printf 'path=%s\n' "$APK_ABS"
+        printf 'size=%s\n' "$APK_SIZE"
+        printf 'mtime=%s\n' "${APK_MTIME:-unknown}"
+        printf 'sha256=%s\n' "${APK_SHA:--}"
+    } > "$tmp" && mv -f "$tmp" "$META"
+}
+
+echo "APK 指纹: size=$APK_SIZE mtime=${APK_MTIME:-unknown} sha256=${APK_SHA:-unavailable}"
+
 CACHE_REUSABLE=0
-if [ -f "$CACHE" ] && [ -f "$META" ] && [ "$(cat "$META")" = "$APK_ABS" ]; then
+if [ -f "$CACHE" ] && meta_matches; then
     CACHE_REUSABLE=1
 fi
 if [ "$CACHE_REUSABLE" -eq 0 ]; then
@@ -238,7 +291,6 @@ if [ "$CACHE_REUSABLE" -eq 0 ]; then
         echo "ERROR: cannot create cache dir: $CACHE_DIR" >&2
         exit 2
     }
-    printf '%s\n' "$APK_ABS" > "$META"
     echo "== 首次为该 apk 建 DexSQL 缓存（约 40 秒）..."
     if ! "$DEXSQL" prepare-cache --input "$TARGET_APK" --output "$CACHE_DIR" \
             --trusted-input > "$CACHE_DIR/prepare.log" 2>&1; then
@@ -251,6 +303,7 @@ if [ "$CACHE_REUSABLE" -eq 0 ]; then
         sed -n '1,20p' "$CACHE_DIR/prepare.log" >&2
         exit 1
     fi
+    write_meta || echo "WARN: cannot write cache meta: $META" >&2
 fi
 echo "缓存: $CACHE"
 echo
@@ -259,59 +312,60 @@ q() { "$DEXSQL" query-cache --cache-file "$CACHE" --trusted-input --sql "$1" 2>/
 
 # 挂载点清单：类描述符|方法名|功能|复核报告|参数个数（可选，空=不校验）
 # 第 5 列填了数字时，用 methods 表的 param_count 做"签名形状"校验：
-# 方法还在但参数个数变了 → SIG。没有数据的条目留空，不做该层校验。
-MOUNTS='Lcom/xingin/advert/spi/AdsIndexSpiImp;|openLCBSplashAdsV2|P0-1 内嵌开屏|splash_ad_path|
-Lcom/xingin/advert/spi/AdsIndexSpiImp;|openLCBRedSplashAdsV2|P0-1 红开屏|splash_ad_path|
-Lcom/xingin/advert/spi/AdsIndexSpiImp;|openLCBBrandMaxSplashAds|P0-1 品牌开屏|splash_ad_path|
-Lcom/xingin/advert/spi/AdsIndexSpiImp;|openBrandMax|P0-1 品牌开屏|splash_ad_path|
-Lcom/xingin/advert/spi/AdsIndexSpiImp;|openNeedLazyHFSplashAds|P0-1 懒加载开屏|splash_ad_path|
-Lcom/xingin/advert/spi/AdsIndexSpiImp;|startAnim|P0-1 开屏动画|splash_ad_path|
-Lcom/xingin/advert/spi/AdsIndexSpiImp;|canLazyOpenSplash|P0-1 开屏决策|splash_ad_path|
-Lcom/xingin/advert/spi/AdsIndexSpiImp;|canNeedNewCloser|P0-1 开屏决策|splash_ad_path|
-Lcom/xingin/advert/intersitial/ui/a;|d|P0-1 全屏开屏出口|splash_ad_path|
-Lcom/xingin/advert/intersitial/ui2/view/SplashAdActivity$a;|a|P0-1 全屏开屏兜底|splash_ad_path|
-Lcom/xingin/advert/intersitial/ui2/view/dynamic/SplashDynamicActivity$a;|a|P0-1 动态开屏兜底|splash_ad_path|
-Lcom/xingin/advert/intersitial/ui2/cny/SplashCNYActivity$a;|a|P0-1 CNY 开屏兜底|splash_ad_path|
-Lcom/xingin/advert/intersitial/ui/InterstitialAdsActivity$a;|a|P0-1 插屏开屏兜底|splash_ad_path|
-Lcom/xingin/advert/intersitial/ui/SplashAdPlaceHolderView;|onCreateView|P0-1 冷启动占位|splash_ad_path|
-Lcom/xingin/advert/spi/AdsHomeFeedManagerServiceImpl;|handleFeedDataIfNeed|P0-2 2-pos 比对|verify_p0_2|
-Lcom/xingin/advert/spi/AdsHomeFeedManagerServiceImpl;|recordAdsNoteData|P0-2 2-pos 记录|verify_p0_2|
+# 方法还在但参数个数变了 → SIG；多个合法重载用逗号分隔（例如 2,3）。
+# 第 5 列为空 = 仅校验名称、未校验签名，输出行会显式标注。
+MOUNTS='Lcom/xingin/advert/spi/AdsIndexSpiImp;|openLCBSplashAdsV2|P0-1 内嵌开屏|splash_ad_path|4
+Lcom/xingin/advert/spi/AdsIndexSpiImp;|openLCBRedSplashAdsV2|P0-1 红开屏|splash_ad_path|8
+Lcom/xingin/advert/spi/AdsIndexSpiImp;|openLCBBrandMaxSplashAds|P0-1 品牌开屏|splash_ad_path|5
+Lcom/xingin/advert/spi/AdsIndexSpiImp;|openBrandMax|P0-1 品牌开屏|splash_ad_path|4
+Lcom/xingin/advert/spi/AdsIndexSpiImp;|openNeedLazyHFSplashAds|P0-1 懒加载开屏|splash_ad_path|6
+Lcom/xingin/advert/spi/AdsIndexSpiImp;|startAnim|P0-1 开屏动画|splash_ad_path|4
+Lcom/xingin/advert/spi/AdsIndexSpiImp;|canLazyOpenSplash|P0-1 开屏决策|splash_ad_path|1
+Lcom/xingin/advert/spi/AdsIndexSpiImp;|canNeedNewCloser|P0-1 开屏决策|splash_ad_path|1
+Lcom/xingin/advert/intersitial/ui/a;|d|P0-1 全屏开屏出口|splash_ad_path|2
+Lcom/xingin/advert/intersitial/ui2/view/SplashAdActivity$a;|a|P0-1 全屏开屏兜底|splash_ad_path|2
+Lcom/xingin/advert/intersitial/ui2/view/dynamic/SplashDynamicActivity$a;|a|P0-1 动态开屏兜底|splash_ad_path|2
+Lcom/xingin/advert/intersitial/ui2/cny/SplashCNYActivity$a;|a|P0-1 CNY 开屏兜底|splash_ad_path|2
+Lcom/xingin/advert/intersitial/ui/InterstitialAdsActivity$a;|a|P0-1 插屏开屏兜底|splash_ad_path|2
+Lcom/xingin/advert/intersitial/ui/SplashAdPlaceHolderView;|onCreateView|P0-1 冷启动占位|splash_ad_path|3
+Lcom/xingin/advert/spi/AdsHomeFeedManagerServiceImpl;|handleFeedDataIfNeed|P0-2 2-pos 比对|verify_p0_2|2
+Lcom/xingin/advert/spi/AdsHomeFeedManagerServiceImpl;|recordAdsNoteData|P0-2 2-pos 记录|verify_p0_2|2
 Lcom/xingin/xhs/homepage/explorefeed/mainfeed/view/ExploreView;|g0|P0-2 广告插入守卫|verify_p0_2|2
 Lcom/xingin/xhs/homepage/explorefeed/mainfeed/view/ExploreView;|S|P0-2 列表追加过滤|verify_p0_2|1
 Lcom/xingin/xhs/homepage/explorefeed/mainfeed/view/ExploreView;|C0|P0-2 列表刷新过滤|verify_p0_2|2
 Lvha/s;|Pd|P0-2 分页上游过滤|verify_p0_2|3
-Lcom/xingin/advert/spi/AdsCommentComponentBinderCreatorImpl;|commentAdvertComponentDSLEnable|P0-3 评论广告|specs|
-Lcom/xingin/update/UpdateDialogActivity;|onCreate|P0-4 更新弹窗|specs|
-Lcom/xingin/update/UpdateDialogActivity;|he|P0-4 更新弹窗补充|specs|
-Lcom/xingin/advert/spi/AdvertSpiImpl;|gotoExtApp|P1-7 外跳主挂|verify_p1_7|
+Lcom/xingin/advert/spi/AdsCommentComponentBinderCreatorImpl;|commentAdvertComponentDSLEnable|P0-3 评论广告|specs|0
+Lcom/xingin/update/UpdateDialogActivity;|onCreate|P0-4 更新弹窗|specs|1
+Lcom/xingin/update/UpdateDialogActivity;|he|P0-4 更新弹窗补充|specs|0
+Lcom/xingin/advert/spi/AdvertSpiImpl;|gotoExtApp|P1-7 外跳主挂|verify_p1_7|3
 Lcom/xingin/xywebview/util/XYWebViewUtil;|b|P1-7 外跳汇聚|verify_p1_7|5
 Ljv8/e;|b|P1-9 剪贴板写入|verify_p1_9|2
 Lcom/xingin/android/redutils/q;|a|P1-9 复制链接收口|verify_p1_9|3
 Ljn6/j;|a|P1-11 水印主挂|verify_watermark|6
 Ljn6/i;|i|P1-11 水印入口|verify_watermark|11
-Lcom/xingin/entities/MediaSaveConfig;|c|P1-11 语义 getter|verify_watermark|
-Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateHelper;|isAutoPlayOpen|P1-12 自动播放|specs|
-Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateHelper;|isAutoPlayOpenServer|P1-12 自动播放|specs|
-Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateTabHelper;|isAutoPlayOpen|P1-12 自动播放|specs|
-Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateTabHelper;|isAutoPlayOpenServer|P1-12 自动播放|specs|
+Lcom/xingin/entities/MediaSaveConfig;|c|P1-11 语义 getter|verify_watermark|0
+Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateHelper;|isAutoPlayOpen|P1-12 自动播放|specs|0
+Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateHelper;|isAutoPlayOpenServer|P1-12 自动播放|specs|0
+Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateTabHelper;|isAutoPlayOpen|P1-12 自动播放|specs|0
+Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateTabHelper;|isAutoPlayOpenServer|P1-12 自动播放|specs|0
 Lpc0/c0;|o|P1-13 搜索广告|verify_p1_13|4
-Lcom/xingin/matrix/notedetail/asyncwidgets/advert/AdvertV2View;|a|P1-14 详情广告条|verify_p1_14|
-Lcom/xingin/matrix/notedetail/asyncwidgets/advert/AdvertV2View;|b|P1-14 详情广告条|verify_p1_14|
+Lcom/xingin/matrix/notedetail/asyncwidgets/advert/AdvertV2View;|a|P1-14 详情广告条|verify_p1_14|1
+Lcom/xingin/matrix/notedetail/asyncwidgets/advert/AdvertV2View;|b|P1-14 详情广告条|verify_p1_14|1
 Lyr7/o;|invoke|P1-15 已删除笔记查看|verify_p1_15|1
-Lcom/xingin/lurker/appscore/ui/AppScoreDialogActivity;|onCreate|P1-16 评分弹窗|verify_p1_16|
-Lcom/xingin/xhs/app/ShareApplication;|tryLaunchGpReview|P1-16 系统评分|verify_p1_16|
-Lcom/xingin/spi/IGrowthCupidProxyImpl;|pushGuideDialogDialogShow|P1-17 通知引导|verify_p1_17|
-Lcom/xingin/spi/IGrowthCupidProxyImpl;|showGuidePopupWindow|P1-17 通知引导|verify_p1_17|
-Lcom/xingin/spi/IGrowthCupidProxyImpl;|showPushGuidShowForInside|P1-17 通知引导|verify_p1_17|
-Lcom/xingin/spi/IGrowthCupidProxyImpl;|openPushGuideActivity|P1-17 通知引导|verify_p1_17|
-Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|shouldShowInternal|P1-18 满意度调研|verify_p1_18|
-Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|showForVideo|P1-18 满意度兜底|verify_p1_18|
-Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|showForImageText|P1-18 满意度兜底|verify_p1_18|
-Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|showContentRatingSnackBarIfNeeded|P1-18 满意度公开入口|verify_p1_18|
-Lcom/xingin/login/manager/UploadContactServiceExtension;|start|P1-19 通讯录同步|verify_p1_19|
-Lcom/xingin/login/manager/UploadContactServiceExtension;|requestContactsSync|P1-19 通讯录同步|verify_p1_19|
-Lcom/xingin/login/manager/UploadContactServiceExtension;|installLifecycleObserver|P1-19 通讯录同步|verify_p1_19|
-Lcom/xingin/commercial/vision/post/spi/GoodsCommentAddInProcessor;|startAddIn|P1-20 评论带货|verify_p1_20|
+Lcom/xingin/lurker/appscore/ui/AppScoreDialogActivity;|onCreate|P1-16 评分弹窗|verify_p1_16|1
+Lcom/xingin/xhs/app/ShareApplication;|tryLaunchGpReview|P1-16 系统评分|verify_p1_16|1
+Lcom/xingin/spi/IGrowthCupidProxyImpl;|pushGuideDialogDialogShow|P1-17 通知引导|verify_p1_17|4
+Lcom/xingin/spi/IGrowthCupidProxyImpl;|showGuidePopupWindow|P1-17 通知引导|verify_p1_17|2
+Lcom/xingin/spi/IGrowthCupidProxyImpl;|showPushGuidShowForInside|P1-17 通知引导|verify_p1_17|2
+Lcom/xingin/spi/IGrowthCupidProxyImpl;|openPushGuideActivity|P1-17 通知引导|verify_p1_17|2
+Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|shouldShowInternal|P1-18 满意度调研|verify_p1_18|1
+Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|showForVideo|P1-18 满意度兜底|verify_p1_18|5
+Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|showForImageText|P1-18 满意度兜底|verify_p1_18|4
+Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|showContentRatingSnackBarIfNeeded|P1-18 满意度公开入口|verify_p1_18|4
+Lcom/xingin/login/manager/UploadContactServiceExtension;|start|P1-19 通讯录同步|verify_p1_19|1
+Lcom/xingin/login/manager/UploadContactServiceExtension;|requestContactsSync|P1-19 通讯录同步|verify_p1_19|2,3
+Lcom/xingin/login/manager/UploadContactServiceExtension;|installLifecycleObserver|P1-19 通讯录同步|verify_p1_19|1
+Lcom/xingin/commercial/vision/post/spi/GoodsCommentAddInProcessor;|startAddIn|P1-20 评论带货|verify_p1_20|5
 Lcom/xingin/xhs/homepage/explorefeed/mainfeed/view/ExploreView;|S|P1-21/22/23 直播/带货/投票卡过滤|verify_p1_21|1
 Lcom/xingin/xhs/homepage/explorefeed/mainfeed/view/ExploreView;|C0|P1-21/22/23 直播/带货/投票卡过滤|verify_p1_21|2
 Lvha/s;|Pd|P1-21/22/23 直播/带货/投票卡过滤|verify_p1_21|3
@@ -323,6 +377,8 @@ printf '%-8s %-92s %s\n' "状态" "挂载点" "功能"
 printf '%.0s-' {1..140}; echo
 
 bad=0
+sig_checked=0
+name_only=0
 while IFS='|' read -r cls mth feat rep pc; do
     [ -z "$cls" ] && continue
     cls_hit=$(q "SELECT count(*) FROM classes WHERE descriptor='$cls'" \
@@ -339,11 +395,22 @@ while IFS='|' read -r cls mth feat rep pc; do
         bad=$((bad+1))
         continue
     fi
-    # 可选第 5 列：填了数字就做参数个数校验（同名重载任一匹配即可）。
+    # 可选第 5 列：填了数字就做参数个数校验（同名重载任一匹配即可；
+    # 逗号分隔表示多个合法重载，例如 requestContactsSync 的 2 参和 3 参都挂）。
+    sig_note=""
     if [ -n "$pc" ]; then
-        pc_hit=$(q "SELECT count(*) FROM methods WHERE class_descriptor='$cls' AND name='$mth' AND param_count=$pc" \
-            | grep -oE '^\| [0-9]+' | tr -d '| ')
-        if [ "${pc_hit:-0}" = "0" ]; then
+        sig_checked=$((sig_checked + 1))
+        pc_hit=0
+        for want in $(printf '%s' "$pc" | tr ',' ' '); do
+            [ -n "$want" ] || continue
+            hit=$(q "SELECT count(*) FROM methods WHERE class_descriptor='$cls' AND name='$mth' AND param_count=$want" \
+                | grep -oE '^\| [0-9]+' | tr -d '| ')
+            if [ "${hit:-0}" != "0" ]; then
+                pc_hit=1
+                break
+            fi
+        done
+        if [ "$pc_hit" -eq 0 ]; then
             actual_pc=$(q "SELECT DISTINCT param_count FROM methods WHERE class_descriptor='$cls' AND name='$mth'" \
                 | grep -oE '[0-9]+' | paste -sd, -)
             printf '%-8s %-64s %s\n' "SIG" \
@@ -352,8 +419,11 @@ while IFS='|' read -r cls mth feat rep pc; do
             bad=$((bad+1))
             continue
         fi
+    else
+        name_only=$((name_only + 1))
+        sig_note="  [仅校验名称/未校验签名]"
     fi
-    printf '%-8s %-64s %s\n' "OK" "${cls#L}#$mth" "$feat"
+    printf '%-8s %-64s %s\n' "OK" "${cls#L}#$mth" "$feat$sig_note"
 done <<< "$MOUNTS"
 
 echo
@@ -361,5 +431,6 @@ echo "OK=还在；GONE=混淆名变了，要重新定位；SIG=方法名变了�
 echo "复核报告路径见上表第四列（research/agy-scratch/，仅本地维护）。"
 
 echo
+echo "签名校验：参数个数 $sig_checked 项 / 仅名称 $name_only 项"
 echo "汇总：GONE/SIG = $bad"
 [ "$bad" -eq 0 ] || exit 1
