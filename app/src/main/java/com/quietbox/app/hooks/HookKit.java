@@ -239,18 +239,29 @@ final class HookKit {
 
     static boolean install(XposedModule module, Feature f, String label, @Nullable Method m,
                            XposedInterface.Hooker hooker) {
-        if (m == null) {
-            warn(module, f.id + " skip: no executable for " + label);
-            HookState.markNotFound(f, "挂载点为空 " + label);
-            return false;
-        }
-        return install(module, f, label, (java.lang.reflect.Executable) m, hooker);
+        return install(module, f, label, (java.lang.reflect.Executable) m, hooker,
+                XposedInterface.ExceptionMode.PROTECTIVE);
+    }
+
+    static boolean install(XposedModule module, Feature f, String label, @Nullable Method m,
+                           XposedInterface.Hooker hooker, XposedInterface.ExceptionMode mode) {
+        return install(module, f, label, (java.lang.reflect.Executable) m, hooker, mode);
     }
 
     /** 构造函数同样可以被 hook，libxposed 的 hook() 接受整个 Executable。 */
     static boolean install(XposedModule module, Feature f, String label,
                            @Nullable java.lang.reflect.Executable m,
                            XposedInterface.Hooker hooker) {
+        return install(module, f, label, m, hooker, XposedInterface.ExceptionMode.PROTECTIVE);
+    }
+
+    /**
+     * 按指定异常模式安装。默认 PROTECTIVE；只有需要把异常传给宿主调用方
+     * （例如 EX-01 让 RxJava 走 onError）的 hook 才使用 PASSTHROUGH。
+     */
+    static boolean install(XposedModule module, Feature f, String label,
+                           @Nullable java.lang.reflect.Executable m,
+                           XposedInterface.Hooker hooker, XposedInterface.ExceptionMode mode) {
         if (m == null) {
             warn(module, f.id + " skip: no executable for " + label);
             HookState.markNotFound(f, "挂载点为空 " + label);
@@ -259,7 +270,7 @@ final class HookKit {
         try {
             module.hook(m)
                     .setId(f.id + "#" + label)
-                    .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
+                    .setExceptionMode(mode)
                     .intercept(hooker);
             HookState.installed(f, label);
             info(module, f.id + " registered " + label);

@@ -53,7 +53,8 @@ final class NoteUnavailableHooks {
                 return;
             }
             Method invoke = HookKit.findByNameAndArity(lambda, "invoke", 1);
-            HookKit.install(module, f, "NoteDetailRepository#map", invoke, hook(module, f));
+            HookKit.install(module, f, "NoteDetailRepository#map", invoke, hook(module, f),
+                    XposedInterface.ExceptionMode.PASSTHROUGH);
             HookState.note(f, "服务端返回 error 页时改用本地数据/离线路径");
         } catch (Throwable t) {
             HookKit.error(module, f.id + " install aborted", t);
