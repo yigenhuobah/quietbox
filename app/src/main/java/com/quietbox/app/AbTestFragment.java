@@ -35,6 +35,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
+import io.github.libxposed.service.XposedService;
+
 /**
  * 「实验」页（EX-02 AB 测试面板）。
  *
@@ -52,12 +54,17 @@ public class AbTestFragment extends PreferenceFragmentCompat {
 
     private ConfigStore mStore;
     private AbConfigStore mAb;
+    /** mStore/mAb 对应的 service 实例；同一实例内 remote prefs 不变，可复用。 */
+    private XposedService mStoreService;
     private MaterialSwitchPreference mMaster;
     private PreferenceCategory mOther;
     private Preference mMore;
 
     private final List<String> mOtherKeys = new ArrayList<>();
     private final Map<String, String> mOtherReport = new LinkedHashMap<>();
+    /** 每个 key 最近一次写入的序号：旧回调不能覆盖新状态。 */
+    private final Map<String, Long> mWriteSeq = new HashMap<>();
+    private long mWriteCounter;
     private int mOtherLoaded;
     private boolean mLoadingMore;
 
@@ -65,9 +72,17 @@ public class AbTestFragment extends PreferenceFragmentCompat {
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
         PreferenceScreen screen = getPreferenceManager().createPreferenceScreen(requireContext());
         setPreferenceScreen(screen);
+        mStoreService = ServiceBridge.get();
         mStore = new ConfigStore(requireContext());
         mAb = new AbConfigStore(requireContext());
         build(screen);
+    }
+
+    @Override
+    public void onDestroyView() {
+        // view 已销毁，旧写入的回调不能再改 UI。
+        mWriteSeq.clear();
+        super.onDestroyView();
     }
 
     @Override
@@ -123,9 +138,17 @@ public class AbTestFragment extends PreferenceFragmentCompat {
         mMaster.setTitle(R.string.ab_panel_title);
         mMaster.setSummary(R.string.ab_panel_summary);
         mMaster.setOnPreferenceChangeListener((pref, value) -> {
-            mAb.setPanelEnabled((Boolean) value);
-            // 直接传新值：setPanelEnabled 是异步落盘，紧接着读 store 可能还是旧值。
-            refresh((Boolean) value);
+            boolean requested = (Boolean) value;
+            long seq = nextWriteSeq(Feature.AB_TEST_PANEL.key);
+            boolean accepted = mAb.setPanelEnabled(requested,
+                    committed -> onWriteResult(Feature.AB_TEST_PANEL.key, seq, committed));
+            if (!accepted) {
+                Toast.makeText(requireContext(), R.string.action_write_failed,
+                        Toast.LENGTH_SHORT).show();
+                return false;
+            }
+            // 直接传新值：写入是后台异步的，紧接着读 store 可能还是旧值。
+            refresh(requested);
             return true;
         });
         screen.addPreference(mMaster);
@@ -154,9 +177,16 @@ public class AbTestFragment extends PreferenceFragmentCompat {
             item.setTitle(test.titleRes);
             item.setOnPreferenceChangeListener((pref, value) -> {
                 boolean forced = (Boolean) value;
-                mAb.setForced(test.key, forced, test.forceValue);
-                // remote prefs 的 apply() 是异步的，立刻回读可能拿到旧值；
-                // 这里按本次操作构造一份乐观覆盖表，只用于刷新摘要。
+                long seq = nextWriteSeq(test.key);
+                boolean accepted = mAb.setForced(test.key, forced, test.forceValue,
+                        committed -> onWriteResult(test.key, seq, committed));
+                if (!accepted) {
+                    Toast.makeText(requireContext(), R.string.action_write_failed,
+                            Toast.LENGTH_SHORT).show();
+                    return false;
+                }
+                // 写入是后台异步的，立刻回读可能拿到旧值；这里按本次操作构造一份
+                // 乐观覆盖表，只用于刷新摘要。
                 Map<String, String> forcedNow = new HashMap<>(mAb.overrides());
                 if (forced) {
                     forcedNow.put(test.key, test.forceValue);
@@ -187,8 +217,7 @@ public class AbTestFragment extends PreferenceFragmentCompat {
         if (ctx == null) {
             return;
         }
-        mStore = new ConfigStore(ctx);
-        mAb = new AbConfigStore(ctx);
+        ensureStores(ctx);
         mAb.syncOverrides();
         boolean master = masterOverride != null
                 ? masterOverride
@@ -222,6 +251,50 @@ public class AbTestFragment extends PreferenceFragmentCompat {
             }
         }
         refreshOther(report);
+    }
+
+    /**
+     * 同一 service 实例内 remote prefs 不会变，复用 store 可省掉每次 refresh
+     * 重新构造 ConfigStore/AbConfigStore 触发的 remote prefs binder。
+     */
+    private void ensureStores(Context ctx) {
+        XposedService service = ServiceBridge.get();
+        if (ConfigWritePolicy.reuseStore(mStore != null && mAb != null,
+                mStoreService, service)) {
+            return;
+        }
+        mStore = new ConfigStore(ctx);
+        mAb = new AbConfigStore(ctx);
+        mStoreService = service;
+    }
+
+    private long nextWriteSeq(String key) {
+        long seq = ++mWriteCounter;
+        mWriteSeq.put(key, seq);
+        return seq;
+    }
+
+    /**
+     * 后台 commit 的结果回到主线程。成功时 UI 已经乐观更新过，无需处理；
+     * 失败必须从真实存储重读，把这次改动从 UI 上撤掉。
+     */
+    private void onWriteResult(String key, long seq, boolean committed) {
+        new Handler(Looper.getMainLooper()).post(() -> {
+            if (!isAdded() || getView() == null || getContext() == null) {
+                return;
+            }
+            Long latest = mWriteSeq.get(key);
+            if (latest == null || latest.longValue() != seq) {
+                // 用户已经又改了一次，旧写入的结果不能覆盖新状态。
+                return;
+            }
+            if (ConfigWritePolicy.keepUiState(true, committed)) {
+                return;
+            }
+            Toast.makeText(requireContext(), R.string.action_write_failed,
+                    Toast.LENGTH_SHORT).show();
+            refresh();
+        });
     }
 
     private void updateItem(MaterialSwitchPreference item, AbTest test,
@@ -348,9 +421,11 @@ public class AbTestFragment extends PreferenceFragmentCompat {
             return;
         }
         Context app = requireContext().getApplicationContext();
+        // 复用当前 store 的本地副本，避免导出线程再构造一份并触发 remote prefs binder。
+        AbConfigStore store = mAb;
         new Thread(() -> {
             try {
-                String csv = buildCsv(app);
+                String csv = buildCsv(app, store);
                 int rows = countRows(csv);
                 try (OutputStream os = app.getContentResolver().openOutputStream(uri)) {
                     if (os == null) {
@@ -371,8 +446,9 @@ public class AbTestFragment extends PreferenceFragmentCompat {
     }
 
     /** 全量目录（assets/ab_catalog.tsv） + 本次探测值，合成与 PC 导出同口径的 CSV。 */
-    private String buildCsv(Context app) throws IOException {
-        Map<String, String> report = new AbConfigStore(app).report();
+    private String buildCsv(Context app, AbConfigStore store) throws IOException {
+        Map<String, String> report = store != null
+                ? store.report() : new AbConfigStore(app).report();
         StringBuilder sb = new StringBuilder(1 << 20);
         sb.append("key,current_value,status,primary_category,recommendation,")
                 .append("curated,force_value,curated_title\n");

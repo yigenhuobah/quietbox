@@ -229,25 +229,37 @@ public final class StatusProvider extends ContentProvider {
      * 只在主进程回传，子进程未装 hook 的 skip 不会被误算。
      */
     public static int failedFeatureCount(Context context) {
+        return failedFeatureCount(context, null);
+    }
+
+    /**
+     * 复用调用方已构造的 store，避免每次统计都重新触发 remote prefs binder。
+     * 必须从后台线程调用（会读 SharedPreferences / remote prefs）。
+     *
+     * @param store 已复用的 store；null 时现场构造一份
+     */
+    static int failedFeatureCount(Context context, ConfigStore store) {
         if (context == null) {
             return 0;
         }
         if (!hasFreshReport(context)) {
             return 0;
         }
-        ConfigStore store;
-        try {
-            store = new ConfigStore(context);
-        } catch (Throwable t) {
-            store = null;
+        ConfigStore configStore = store;
+        if (configStore == null) {
+            try {
+                configStore = new ConfigStore(context);
+            } catch (Throwable t) {
+                configStore = null;
+            }
         }
         int failed = 0;
         for (Feature f : Feature.values()) {
             if (f.blocked()) {
                 continue;
             }
-            boolean enabled = store != null
-                    ? store.get(f.key, f.defaultEnabled) : f.defaultEnabled;
+            boolean enabled = configStore != null
+                    ? configStore.get(f.key, f.defaultEnabled) : f.defaultEnabled;
             if (!enabled) {
                 continue;
             }

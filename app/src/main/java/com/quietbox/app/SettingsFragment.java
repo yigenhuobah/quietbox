@@ -1,8 +1,11 @@
 package com.quietbox.app;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.pm.PackageInfo;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.util.Log;
 import android.widget.Toast;
@@ -10,7 +13,9 @@ import android.widget.Toast;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -43,6 +48,8 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                 return t;
             });
 
+    private static final Handler MAIN = new Handler(Looper.getMainLooper());
+
     private ConfigStore mStore;
     /** mStore 对应的 service 实例；同一实例内 remote prefs 不变，可复用。 */
     private XposedService mStoreService;
@@ -51,6 +58,14 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     private XposedService mLastRefreshService;
     /** 后台状态查询句柄：新查询提交前取消旧的，onDestroyView 取消全部。 */
     private Future<?> mStatusFuture;
+    /** 后台失败计数查询句柄；只允许最新一次结果更新横幅。 */
+    private Future<?> mBannerFuture;
+    private long mBannerSeq;
+    /** 每个 key 最近一次写入的序号：旧回调不能覆盖新状态。 */
+    private final Map<String, Long> mWriteSeq = new HashMap<>();
+    /** 每个 key 最近一次确认落盘成功的值：写失败回滚用它，避免主线程再读 binder。 */
+    private final Map<String, Boolean> mConfirmed = new HashMap<>();
+    private long mWriteCounter;
     /** versionName 在 Fragment 生命周期内不变，只读一次 PackageManager。 */
     private String mVersionName;
 
@@ -77,6 +92,14 @@ public class SettingsFragment extends PreferenceFragmentCompat {
             mStatusFuture.cancel(true);
             mStatusFuture = null;
         }
+        if (mBannerFuture != null) {
+            mBannerFuture.cancel(true);
+            mBannerFuture = null;
+        }
+        mBannerSeq++;
+        // 旧写入的回调不能再改已经销毁的 view。
+        mWriteSeq.clear();
+        mConfirmed.clear();
         // 二级页返回或旋转后 view 会重建：取消过的查询不能靠 1 秒节流挡掉，
         // 否则状态卡可能停在被取消前的旧状态。
         mHasRefreshed = false;
@@ -98,16 +121,10 @@ public class SettingsFragment extends PreferenceFragmentCompat {
             p.setTitle(f.titleRes);
             p.setSummary(f.summaryRes);
             p.setOnPreferenceChangeListener((pref, value) -> {
-                if (value instanceof Boolean) {
-                    boolean ok = mStore.put(f.key, (Boolean) value);
-                    if (!ok) {
-                        Toast.makeText(requireContext(), R.string.action_write_failed,
-                                Toast.LENGTH_SHORT).show();
-                        // 返回 false：MaterialSwitch 回滚到旧状态。
-                        return false;
-                    }
+                if (!(value instanceof Boolean)) {
+                    return true;
                 }
-                return true;
+                return writeBoolean(f.key, (Boolean) value);
             });
         }
 
@@ -116,17 +133,59 @@ public class SettingsFragment extends PreferenceFragmentCompat {
             token.setTitle(R.string.f_p1_9_strip_xsec_token_title);
             token.setSummary(R.string.f_p1_9_strip_xsec_token_summary);
             token.setOnPreferenceChangeListener((pref, value) -> {
-                if (value instanceof Boolean) {
-                    boolean ok = mStore.put(Config.KEY_STRIP_XSEC_TOKEN, (Boolean) value);
-                    if (!ok) {
-                        Toast.makeText(requireContext(), R.string.action_write_failed,
-                                Toast.LENGTH_SHORT).show();
-                        return false;
-                    }
+                if (!(value instanceof Boolean)) {
+                    return true;
                 }
-                return true;
+                return writeBoolean(Config.KEY_STRIP_XSEC_TOKEN, (Boolean) value);
             });
         }
+    }
+
+    /**
+     * 提交一次开关写入。
+     *
+     * @return true = 已排入后台提交（UI 先乐观显示新值）；false = remote 不可用，
+     *         MaterialSwitch 会回滚，同时 Toast 提示。
+     */
+    private boolean writeBoolean(String key, boolean requested) {
+        long seq = ++mWriteCounter;
+        mWriteSeq.put(key, seq);
+        boolean accepted = mStore.put(key, requested,
+                committed -> onWriteResult(key, requested, seq, committed));
+        if (!accepted) {
+            Toast.makeText(requireContext(), R.string.action_write_failed,
+                    Toast.LENGTH_SHORT).show();
+        }
+        return accepted;
+    }
+
+    /**
+     * 后台 commit 的结果回到主线程：成功才确认新值，失败必须回滚并提示。
+     * 回调在后台线程触发，不能直接碰 Preference。
+     */
+    private void onWriteResult(String key, boolean requested, long seq, boolean committed) {
+        MAIN.post(() -> {
+            if (!isAdded() || getView() == null) {
+                return;
+            }
+            Long latest = mWriteSeq.get(key);
+            if (latest == null || latest.longValue() != seq) {
+                // 用户已经又改了一次，旧写入的结果不能覆盖新状态。
+                return;
+            }
+            if (ConfigWritePolicy.keepUiState(true, committed)) {
+                mConfirmed.put(key, requested);
+                return;
+            }
+            Toast.makeText(requireContext(), R.string.action_write_failed,
+                    Toast.LENGTH_SHORT).show();
+            Preference p = findPreference(key);
+            if (p instanceof MaterialSwitchPreference) {
+                Boolean confirmed = mConfirmed.get(key);
+                ((MaterialSwitchPreference) p).setCheckedValue(
+                        confirmed != null ? confirmed : !requested);
+            }
+        });
     }
 
     /** 页脚说明。 */
@@ -158,7 +217,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         mLastRefreshService = service;
 
         // 同一 service 实例内 remote prefs 不会变，复用 mStore 可省掉每次 refresh 的 binder。
-        if (mStore == null || service != mStoreService) {
+        if (!ConfigWritePolicy.reuseStore(mStore != null, mStoreService, service)) {
             mStore = new ConfigStore(requireContext());
             mStoreService = service;
         }
@@ -180,7 +239,9 @@ public class SettingsFragment extends PreferenceFragmentCompat {
             Preference p = findPreference(f.key);
             if (p instanceof MaterialSwitchPreference) {
                 MaterialSwitchPreference sw = (MaterialSwitchPreference) p;
-                sw.setCheckedValue(mStore.get(f.key, f.defaultEnabled));
+                boolean checked = mStore.get(f.key, f.defaultEnabled);
+                sw.setCheckedValue(checked);
+                mConfirmed.put(f.key, checked);
                 // 框架没绑定时写不进去，置灰避免“改了没用”；blocked 始终置灰。
                 sw.setEnabled(writable && !f.blocked());
             }
@@ -189,8 +250,10 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         Preference token = findPreference(Config.KEY_STRIP_XSEC_TOKEN);
         if (token instanceof MaterialSwitchPreference) {
             MaterialSwitchPreference sw = (MaterialSwitchPreference) token;
-            sw.setCheckedValue(mStore.get(Config.KEY_STRIP_XSEC_TOKEN,
-                    Config.DEFAULT_STRIP_XSEC_TOKEN));
+            boolean checked = mStore.get(Config.KEY_STRIP_XSEC_TOKEN,
+                    Config.DEFAULT_STRIP_XSEC_TOKEN);
+            sw.setCheckedValue(checked);
+            mConfirmed.put(Config.KEY_STRIP_XSEC_TOKEN, checked);
             sw.setEnabled(writable && mStore.get(Feature.COPY_LINK_SANITIZE.key,
                     Feature.COPY_LINK_SANITIZE.defaultEnabled));
         }
@@ -264,7 +327,12 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         });
     }
 
-    /** 版本不匹配或 ≥2 个功能失效时显示红色横幅；不新增第五种状态。 */
+    /**
+     * 版本不匹配或 ≥2 个功能失效时显示红色横幅；不新增第五种状态。
+     *
+     * failedFeatureCount 会读 remote prefs（ConfigStore.get）与状态存储，
+     * 不能在主线程跑：统计放 STATUS_EXECUTOR，结果回主线程更新横幅。
+     */
     private void updateBanner() {
         Preference banner = findPreference("warning");
         if (banner == null || getContext() == null) {
@@ -273,24 +341,56 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         String target = targetVersion();
         if (target == null) {
             // 目标应用未安装或 PackageManager 读不到版本：不显示横幅，避免误导。
+            mBannerSeq++;
             banner.setVisible(false);
             return;
         }
-        String message = null;
         if (!VersionGate.isSupported(target)) {
-            message = getString(R.string.status_banner_version, target,
-                    VersionGate.SUPPORTED_VERSION);
-        } else {
-            int failed = StatusProvider.failedFeatureCount(requireContext());
-            if (failed >= 2) {
-                message = getString(R.string.status_banner_failed, failed);
-            }
-        }
-        if (message == null) {
-            banner.setVisible(false);
-        } else {
-            banner.setSummary(message);
+            mBannerSeq++;
+            banner.setSummary(getString(R.string.status_banner_version, target,
+                    VersionGate.SUPPORTED_VERSION));
             banner.setVisible(true);
+            return;
+        }
+
+        final Activity host = getActivity();
+        if (host == null) {
+            return;
+        }
+        final Context app = requireContext().getApplicationContext();
+        final ConfigStore store = mStore;
+        final String expectedTarget = target;
+        final long seq = ++mBannerSeq;
+        if (mBannerFuture != null) {
+            mBannerFuture.cancel(false);
+        }
+        mBannerFuture = STATUS_EXECUTOR.submit(() -> {
+            int failed = StatusProvider.failedFeatureCount(app, store);
+            host.runOnUiThread(() -> {
+                if (seq != mBannerSeq || !isAdded() || getView() == null
+                        || getActivity() != host) {
+                    return;
+                }
+                // 统计期间目标应用可能升级/卸载，版本变了就等下一次 refresh。
+                if (!expectedTarget.equals(targetVersion())) {
+                    return;
+                }
+                applyBannerCount(failed);
+            });
+        });
+    }
+
+    /** 只在主线程调用：把后台统计出的失败数落到横幅。 */
+    private void applyBannerCount(int failed) {
+        Preference banner = findPreference("warning");
+        if (banner == null) {
+            return;
+        }
+        if (failed >= 2) {
+            banner.setSummary(getString(R.string.status_banner_failed, failed));
+            banner.setVisible(true);
+        } else {
+            banner.setVisible(false);
         }
     }
 
