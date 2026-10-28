@@ -113,7 +113,7 @@ final class WatermarkHooks {
         }
 
         if (installed == 0) {
-            HookState.note(f, "水印挂载点未找到");
+            HookState.markNotFound(f, "水印挂载点未找到");
         }
     }
 

@@ -51,6 +51,17 @@ public class HookStateTest {
     }
 
     @Test
+    public void enableCreatesEmptyStateForUntouchedFeature() {
+        Feature f = Feature.COMMENT_AD_FILTER;
+        HookState.enable(f);
+        assertTrue("enable 后 Feature 必须进入 touched，才能回传空 reg/skip",
+                HookState.touched().contains(f));
+        assertTrue(HookState.labels(f).isEmpty());
+        assertNull(HookState.skipReason(f));
+        assertEquals(0L, HookState.hitCount(f));
+    }
+
+    @Test
     public void snapshotAggregatesFeatureLevelState() {
         Feature f = Feature.WATERMARK_POLICY;
         HookState.installed(f, "alpha");

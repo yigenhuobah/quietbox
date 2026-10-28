@@ -30,6 +30,12 @@ android {
         versionName "0.8.1"
     }
 
+    testOptions {
+        // HookState/Report 等纯 JVM 测试会经过 android.util.Log；
+        // 与 CloudMusicTool 保持一致，让未 mock 的 Android 方法返回默认值。
+        unitTests.returnDefaultValues = true
+    }
+
     signingConfigs {
         if (hasKeystore) {
             release {

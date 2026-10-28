@@ -46,6 +46,19 @@ public class ReportTest {
     }
 
     @Test
+    public void snapshotIncludesEnabledButNotInstalled() {
+        Feature f = Feature.SEARCH_AD_FILTER;
+        HookState.enable(f);
+
+        Map<String, String> snap = Report.snapshot();
+
+        assertEquals("enable 后必须发送空 reg，清掉旧会话标签", "",
+                snap.get(ReportProtocol.PREFIX_REG + f.key));
+        assertEquals("enable 后必须发送空 skip，清掉旧会话 skip", "",
+                snap.get(ReportProtocol.PREFIX_SKIP + f.key));
+    }
+
+    @Test
     public void snapshotKeepsPositiveHit() {
         Feature f = Feature.FEED_GOODS_CARD_BLOCK;
         HookState.installed(f, "beta");

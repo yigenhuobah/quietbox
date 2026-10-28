@@ -51,8 +51,12 @@ public final class HookState {
         return s;
     }
 
-    /** 功能开始安装；仅用于日志，不代表任何 hook 已注册。 */
+    /**
+     * 功能开始安装。创建空 State，确保「已启用但安装阶段完全没有 touch」的功能
+     * 也会进入快照并发送空 reg/skip，从而清掉上一会话的旧 skip。
+     */
     public static void enable(Feature f) {
+        state(f);
         Log.i(TAG, f.id + " enabled");
     }
 
