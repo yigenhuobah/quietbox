@@ -4,7 +4,6 @@ import android.content.ClipData;
 import android.content.ClipDescription;
 import android.content.ClipboardManager;
 import android.content.Context;
-import android.net.Uri;
 
 import androidx.annotation.Nullable;
 
@@ -12,8 +11,10 @@ import com.quietbox.app.Feature;
 import com.quietbox.app.HookState;
 
 import java.lang.reflect.Method;
+import java.net.URLDecoder;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 import io.github.libxposed.api.XposedInterface;
@@ -38,7 +39,10 @@ import io.github.libxposed.api.XposedModule;
  *    String 级精确净化，与旧 urlArgHook 同构。
  * 旧 e2c.i 硬编码已移除（不再依赖混淆类名）。
  *
- * 净化规则：默认只删纯追踪参数（share_id/xhsshare/shareRedId/apptime/sid，
+ * 净化规则：只对小红书域名（xiaohongshu.com / xhslink.com / xhslink.cn / xhs.cn
+ * 及其子域）或 label 为 "ug-share-copy-link" 的复制生效，未知 host 原样放行
+ * （剪贴板写入点是全 App 收口，用户复制外部链接时不能被误删 sid 等通用参数）。
+ * 默认只删纯追踪参数（share_id/xhsshare/shareRedId/apptime/sid，
  * 与源码 addShareParams:526-530 写入的键一致）；xsec_token 是访问令牌，默认保留，
  * 由 p1_9_strip_xsec_token 子选项控制。
  */
@@ -53,6 +57,9 @@ final class CopyLinkHooks {
 
     private static final String[] TRACKING = {"share_id", "xhsshare", "shareRedId", "apptime", "sid"};
     private static final String XSEC_TOKEN = "xsec_token";
+
+    /** 小红书链接域名（含子域）；只有这些 host 的复制默认参与净化。 */
+    private static final String[] XHS_HOSTS = {"xiaohongshu.com", "xhslink.com", "xhslink.cn", "xhs.cn"};
 
     /** 诊断用：每个 label 只记一次"见到剪贴板写入"，避免刷屏，也便于确认真实链路。 */
     private static final Set<String> SEEN = new HashSet<>();
@@ -128,18 +135,18 @@ final class CopyLinkHooks {
             return null;
         }
         String raw = (String) text;
-        String clean = sanitize(raw, stripToken);
+        String clean = sanitizeCopy(raw, label, stripToken);
         if (clean.equals(raw)) {
             return null;
         }
         HookKit.hit(module, f, "ClipboardProxyImpl removed=" + removedKeys(raw, stripToken));
-            ClipData out = ClipData.newPlainText(label, clean);
-            ClipDescription src = clip.getDescription();
-            if (src != null && src.getExtras() != null) {
-                out.getDescription().setExtras(
-                        new android.os.PersistableBundle(src.getExtras()));
-            }
-            return out;
+        ClipData out = ClipData.newPlainText(label, clean);
+        ClipDescription src = clip.getDescription();
+        if (src != null && src.getExtras() != null) {
+            out.getDescription().setExtras(
+                    new android.os.PersistableBundle(src.getExtras()));
+        }
+        return out;
     }
 
     /** 副挂：redutils/q.a(Context, label, text)，只对 label == "ug-share-copy-link" 的复制链接生效。 */
@@ -152,10 +159,10 @@ final class CopyLinkHooks {
                     Object label = args.get(1);
                     Object text = args.get(2);
                     seen(module, f, "redutils/q.a label=" + label);
-                    if (label instanceof CharSequence && text instanceof String
-                            && label.toString().contains(COPY_LABEL)) {
+                    CharSequence csLabel = label instanceof CharSequence ? (CharSequence) label : null;
+                    if (text instanceof String && isCopyLabel(csLabel)) {
                         String raw = (String) text;
-                        String clean = sanitize(raw, stripToken);
+                        String clean = sanitizeCopy(raw, csLabel, stripToken);
                         if (!clean.equals(raw)) {
                             replaced = args.toArray();
                             replaced[2] = clean;
@@ -168,6 +175,97 @@ final class CopyLinkHooks {
             }
             return replaced == null ? chain.proceed() : chain.proceed(replaced);
         };
+    }
+
+    /**
+     * 复制内容净化入口：只有小红书 host 或 copy-link label 才净化；未知 host、
+     * 非 http(s) URL 文本一律原样返回。纯函数，供 JVM 单测直接调用。
+     */
+    @Nullable
+    static String sanitizeCopy(@Nullable String text, @Nullable CharSequence label,
+                               boolean stripXsecToken) {
+        if (text == null || text.isEmpty()) {
+            return text;
+        }
+        String host = hostOf(text);
+        if (host == null) {
+            // 非 http(s) URL 文本（普通文本、file: 等）：不动。
+            return text;
+        }
+        if (!isXhsHost(host) && !isCopyLabel(label)) {
+            return text;
+        }
+        return sanitize(text, stripXsecToken);
+    }
+
+    /** label 是否为小红书"复制链接"动作的标记（ClipData label 兜底用）。 */
+    static boolean isCopyLabel(@Nullable CharSequence label) {
+        return label != null && label.toString().contains(COPY_LABEL);
+    }
+
+    /** host（大小写不敏感、允许 FQDN 尾点）是否属于小红书域名；未知 host 返回 false。 */
+    static boolean isXhsHost(@Nullable String host) {
+        if (host == null) {
+            return false;
+        }
+        String h = host.toLowerCase(Locale.ROOT);
+        if (h.endsWith(".")) {
+            h = h.substring(0, h.length() - 1);
+        }
+        for (String domain : XHS_HOSTS) {
+            if (h.equals(domain) || h.endsWith("." + domain)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 取 http(s) URL 的 host（去 userinfo / 端口，IPv6 去方括号）；非 URL、
+     * 非 http(s) 或 authority 为空时返回 null。手工解析不经 android.net.Uri，
+     * 保证纯 JVM 单测可运行。
+     */
+    @Nullable
+    private static String hostOf(@Nullable String text) {
+        if (text == null) {
+            return null;
+        }
+        String s = text.trim();
+        int sep = s.indexOf("://");
+        if (sep <= 0) {
+            return null;
+        }
+        String scheme = s.substring(0, sep);
+        if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
+            return null;
+        }
+        int start = sep + 3;
+        int end = start;
+        while (end < s.length()) {
+            char c = s.charAt(end);
+            if (c == '/' || c == '?' || c == '#') {
+                break;
+            }
+            end++;
+        }
+        String authority = s.substring(start, end);
+        int at = authority.lastIndexOf('@');
+        if (at >= 0) {
+            authority = authority.substring(at + 1);
+        }
+        if (authority.startsWith("[")) {
+            int close = authority.indexOf(']');
+            if (close < 0) {
+                return null;
+            }
+            authority = authority.substring(1, close);
+        } else {
+            int colon = authority.indexOf(':');
+            if (colon >= 0) {
+                authority = authority.substring(0, colon);
+            }
+        }
+        return authority.isEmpty() ? null : authority;
     }
 
     static String sanitize(String url, boolean stripXsecToken) {
@@ -222,9 +320,17 @@ final class CopyLinkHooks {
         return removed ? sb.toString() : null;
     }
 
+    /**
+     * 参数名解码（仅用于和 TRACKING 常量比较）。用 JDK URLDecoder 而不是
+     * android.net.Uri#decode：后者在 JVM 单测里是返回默认值的 stub，且不经
+     * Android 运行时也无从验证。解码失败时退回原串，避免把合法参数误判。
+     */
     private static String dec(String s) {
+        if (s == null || s.indexOf('%') < 0) {
+            return s;
+        }
         try {
-            return Uri.decode(s);
+            return URLDecoder.decode(s, "UTF-8");
         } catch (Throwable t) {
             return s;
         }
