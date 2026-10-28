@@ -2,6 +2,7 @@ package com.quietbox.app.hooks;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import com.quietbox.app.Feature;
@@ -70,5 +71,44 @@ public class ReportTest {
         assertEquals("2", snap.get(ReportProtocol.PREFIX_HIT + f.key));
         assertTrue(snap.containsKey(ReportProtocol.PREFIX_SKIP + f.key));
         assertEquals("", snap.get(ReportProtocol.PREFIX_SKIP + f.key));
+    }
+
+    @Test
+    public void snapshotCarriesStableSessionAndUpdatedAt() {
+        Map<String, String> first = Report.snapshot();
+        String session = first.get(ReportProtocol.KEY_META_SESSION);
+        assertNotNull("必须回传 meta.session", session);
+        assertTrue("session 必须是可比较的启动时刻", Long.parseLong(session) > 0L);
+        assertTrue("必须回传 meta.updated_at",
+                Long.parseLong(first.get(ReportProtocol.KEY_META_UPDATED_AT)) > 0L);
+
+        Map<String, String> second = Report.snapshot();
+        assertEquals("同一进程会话标识必须稳定", session,
+                second.get(ReportProtocol.KEY_META_SESSION));
+    }
+
+    @Test
+    public void snapshotMarksCriticalClassSkip() {
+        Feature f = Feature.NOTE_DETAIL_AD_BANNER;
+        HookState.markNotFoundCritical(f, "类未找到 x");
+
+        Map<String, String> snap = Report.snapshot();
+
+        assertEquals("1", snap.get(ReportProtocol.PREFIX_CRIT + f.key));
+        assertEquals("类未找到 x", snap.get(ReportProtocol.PREFIX_SKIP + f.key));
+    }
+
+    @Test
+    public void snapshotKeepsOptionalSkipNonCritical() {
+        Feature f = Feature.PUSH_GUIDE_BLOCK;
+        HookState.installed(f, "alpha");
+        HookState.markNotFound(f, "方法未找到 x");
+
+        Map<String, String> snap = Report.snapshot();
+
+        assertEquals("alpha", snap.get(ReportProtocol.PREFIX_REG + f.key));
+        assertEquals("方法未找到 x", snap.get(ReportProtocol.PREFIX_SKIP + f.key));
+        assertEquals("方法级 skip 不能标 critical", "",
+                snap.get(ReportProtocol.PREFIX_CRIT + f.key));
     }
 }

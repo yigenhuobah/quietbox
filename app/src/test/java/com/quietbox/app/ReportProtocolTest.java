@@ -2,15 +2,20 @@ package com.quietbox.app;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
 
 /**
- * StatusProvider 的纯 Java 协议规则：键白名单、值长度、hit 最大值合并。
+ * StatusProvider 的纯 Java 协议规则：键白名单、值长度、hit 最大值合并、
+ * critical skip 判定、会话新旧比较与 TTL 新鲜度。
  * 这些规则决定跨进程写入 prefs 的边界，改动必须同步更新本测试。
  */
 public class ReportProtocolTest {
@@ -32,6 +37,17 @@ public class ReportProtocolTest {
             count += 3;
         }
         assertEquals(72, count);
+    }
+
+    @Test
+    public void validKeyAcceptsCriticalAndMetaKeys() {
+        for (Feature f : Feature.values()) {
+            assertTrue("crit 键必须放行", ReportProtocol.validKey(ReportProtocol.PREFIX_CRIT + f.key));
+        }
+        assertTrue(ReportProtocol.validKey(ReportProtocol.KEY_META_SESSION));
+        assertTrue(ReportProtocol.validKey(ReportProtocol.KEY_META_UPDATED_AT));
+        assertFalse(ReportProtocol.validKey("meta.unknown"));
+        assertFalse(ReportProtocol.validKey("crit."));
     }
 
     @Test
@@ -143,7 +159,97 @@ public class ReportProtocolTest {
         assertEquals(0, failedCount(null, null, 0L)); // 无回传不计入
     }
 
+    /** 可选锚点（方法）缺失：已有主锚点注册时不算失败，skip 仍保留给诊断页。 */
+    @Test
+    public void optionalSkipWithRegistrationIsNotFailure() {
+        assertFalse(ReportProtocol.featureFailed("m0#e0", "方法未找到 x", false, 0L));
+        assertFalse(ReportProtocol.featureFailed("m0#e0|g8d.s#Yd", "方法未找到 x", false, 3L));
+    }
+
+    /** 主锚点（类）缺失：即使已有其它注册标签，也必须计入失败。 */
+    @Test
+    public void criticalSkipIsFailure() {
+        assertTrue(ReportProtocol.featureFailed("m0#e0", "类未找到 x", true, 0L));
+        assertTrue(ReportProtocol.featureFailed("m0#e0", "类未找到 x", true, 5L));
+        assertTrue("critical 标记本身就算有回传",
+                ReportProtocol.featureFailed("", "", true, 0L));
+    }
+
+    /** 没有注册标签仍然是明确失败，与 critical 标记无关。 */
+    @Test
+    public void missingRegIsFailureEvenWithoutCriticalSkip() {
+        assertTrue(ReportProtocol.featureFailed("", "方法未找到 x", false, 0L));
+        assertTrue(ReportProtocol.featureFailed("", "", false, 3L));
+        assertFalse(ReportProtocol.featureFailed("", "", false, 0L));
+    }
+
+    @Test
+    public void isCriticalOnlyAcceptsMarkerValue() {
+        assertTrue(ReportProtocol.isCritical("1"));
+        assertFalse(ReportProtocol.isCritical(""));
+        assertFalse(ReportProtocol.isCritical(null));
+        assertFalse(ReportProtocol.isCritical("0"));
+        assertFalse(ReportProtocol.isCritical("true"));
+    }
+
+    @Test
+    public void isFreshHonorsTtlAndMissingTimestamp() {
+        long now = 10_000_000L;
+        long ttl = ReportProtocol.DEFAULT_TTL_MS;
+        assertTrue(ReportProtocol.isFresh(now - 60_000L, now, ttl));
+        assertTrue("恰好等于 TTL 仍算新鲜", ReportProtocol.isFresh(now - ttl, now, ttl));
+        assertFalse(ReportProtocol.isFresh(now - ttl - 1L, now, ttl));
+        assertFalse("从未回传视为不新鲜", ReportProtocol.isFresh(0L, now, ttl));
+        assertFalse(ReportProtocol.isFresh(-1L, now, ttl));
+        assertTrue("时钟回拨按新鲜处理", ReportProtocol.isFresh(now + 60_000L, now, ttl));
+    }
+
+    @Test
+    public void sessionComparisonRejectsStaleWrites() {
+        // 无已存会话：带 session 的首次回传算新会话；旧版无 session 不算新。
+        assertTrue(ReportProtocol.isNewSession(null, "200"));
+        assertTrue(ReportProtocol.isNewSession("", "200"));
+        assertFalse(ReportProtocol.isNewSession(null, null));
+        assertFalse(ReportProtocol.isNewSession("100", "100"));
+
+        // 旧会话迟到写入必须整批丢弃；新会话可以覆盖。
+        assertTrue(ReportProtocol.isStaleSession("200", "100"));
+        assertTrue(ReportProtocol.isStaleSession("200", null));
+        assertFalse(ReportProtocol.isStaleSession("200", "200"));
+        assertFalse(ReportProtocol.isStaleSession("200", "300"));
+        assertFalse(ReportProtocol.isStaleSession(null, "100"));
+
+        assertTrue(ReportProtocol.isNewSession("100", "200"));
+        assertFalse(ReportProtocol.isNewSession("200", "100"));
+    }
+
+    @Test
+    public void awaitOrCancelReturnsCompletedValue() {
+        FutureTask<String> task = new FutureTask<>(() -> "ok");
+        task.run();
+        assertEquals("ok", ReportProtocol.awaitOrCancel(task, 1_000L));
+    }
+
+    @Test
+    public void awaitOrCancelTimesOutAndCancels() throws Exception {
+        CountDownLatch latch = new CountDownLatch(1);
+        FutureTask<String> task = new FutureTask<>(() -> {
+            latch.await();
+            return "late";
+        });
+        Thread worker = new Thread(task, "report-protocol-test");
+        worker.setDaemon(true);
+        worker.start();
+        try {
+            assertNull("超时必须返回 null，不能抛出", ReportProtocol.awaitOrCancel(task, 50L));
+            assertTrue("超时后必须取消 future", task.isCancelled());
+        } finally {
+            latch.countDown();
+            worker.join(TimeUnit.SECONDS.toMillis(2));
+        }
+    }
+
     private static int failedCount(String reg, String skip, long hit) {
-        return ReportProtocol.featureFailed(reg, skip, hit) ? 1 : 0;
+        return ReportProtocol.featureFailed(reg, skip, false, hit) ? 1 : 0;
     }
 }

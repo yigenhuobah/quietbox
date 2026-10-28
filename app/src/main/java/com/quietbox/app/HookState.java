@@ -29,6 +29,7 @@ public final class HookState {
 
     private static final class State {
         final Set<String> labels = ConcurrentHashMap.newKeySet();
+        final Set<String> criticalSkips = ConcurrentHashMap.newKeySet();
         final AtomicLong hits = new AtomicLong();
         volatile String skip;
 
@@ -64,8 +65,30 @@ public final class HookState {
         state(f).labels.add(label);
     }
 
+    /**
+     * 可选锚点缺失：只记录 skip 供诊断页展示，不计入失败横幅。
+     * 方法改名/签名变化都属于这一类。
+     */
     public static void markNotFound(Feature f, String reason) {
         state(f).markSkip(reason);
+    }
+
+    /**
+     * 主锚点缺失（例如整个类找不到）：除记录 skip 外，再打上 critical 标记，
+     * 让 ReportProtocol.featureFailed 把该功能计入失败横幅。
+     */
+    public static void markNotFoundCritical(Feature f, String reason) {
+        State s = state(f);
+        s.markSkip(reason);
+        if (reason != null) {
+            s.criticalSkips.add(reason);
+        }
+    }
+
+    /** 本会话是否出现过主锚点缺失。 */
+    public static boolean hasCriticalSkip(Feature f) {
+        State s = STATES.get(f);
+        return s != null && !s.criticalSkips.isEmpty();
     }
 
     /** 命中计数 +1，返回累加后的次数。 */

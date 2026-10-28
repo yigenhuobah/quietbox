@@ -1,6 +1,7 @@
 package com.quietbox.app;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -40,6 +41,30 @@ public class HookStateTest {
         HookState.markNotFound(f, "first");
         HookState.markNotFound(f, "second");
         assertEquals("second", HookState.skipReason(f));
+        assertFalse("方法级 skip 是可选锚点，不能标 critical", HookState.hasCriticalSkip(f));
+    }
+
+    @Test
+    public void markNotFoundCriticalSetsSkipAndCriticalFlag() {
+        Feature f = Feature.EXT_APP_BLOCK;
+        HookState.markNotFoundCritical(f, "类未找到 x");
+        assertEquals("类未找到 x", HookState.skipReason(f));
+        assertTrue("类缺失必须标 critical", HookState.hasCriticalSkip(f));
+    }
+
+    @Test
+    public void criticalFlagSurvivesLaterOptionalSkip() {
+        Feature f = Feature.CONTENT_RATING_BLOCK;
+        HookState.markNotFoundCritical(f, "类未找到 x");
+        HookState.markNotFound(f, "方法未找到 y");
+        assertEquals("诊断页展示最后一个原因", "方法未找到 y", HookState.skipReason(f));
+        assertTrue("后续可选 skip 不能清掉 critical 标记", HookState.hasCriticalSkip(f));
+    }
+
+    @Test
+    public void untouchedFeatureHasNoCriticalSkip() {
+        Feature f = Feature.GOODS_COMMENT_BLOCK;
+        assertFalse(HookState.hasCriticalSkip(f));
     }
 
     @Test
