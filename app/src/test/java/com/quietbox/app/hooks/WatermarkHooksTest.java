@@ -14,9 +14,10 @@ import java.lang.reflect.Modifier;
 /**
  * WatermarkHooks.applyWatermarkFlags 的 JVM 单测。
  *
- * dexsql 对 9.51.0 的结论（见 WatermarkHooks.applyWatermarkFlags 注释）：
- * ce8.i#i 共 11 参，index 5 = disableWaterMark，index 10 = disableAiWaterMark
- * （AND 上 ce8.i#b() 后进 ce8.j#a 第 6 参）；index 8 / 9 与水印绘制无关，不许置位。
+ * dexsql 对 9.52.0 的结论（见 WatermarkHooks.applyWatermarkFlags 注释）：
+ * jn6.i#i 共 11 参，index 5 = disableWaterMark，index 10 = disableAiWaterMark
+ * （AND 上 jn6.i#b() 后进 jn6.j#a 第 6 参）；index 8 / 9 与水印绘制无关，不许置位。
+ * 9.51.0 对应 ce8.i#i / ce8.j#a，布尔位语义相同。
  */
 public class WatermarkHooksTest {
 
@@ -81,7 +82,7 @@ public class WatermarkHooksTest {
         assertNull(WatermarkHooks.applyWatermarkFlags(null));
         assertNull(WatermarkHooks.applyWatermarkFlags(new Object[0]));
         assertNull(WatermarkHooks.applyWatermarkFlags(new Object[6]));
-        // 9.50.0 形状（12 参 nd8.i#g）与 9.51.0 的 12 参重载 ce8.i#g 都不匹配。
+        // 9.52.0 的 12 参重载 jn6.i#g（9.51.0 为 ce8.i#g）与 9.50.0 的 nd8.i#g 都不匹配。
         assertNull(WatermarkHooks.applyWatermarkFlags(new Object[12]));
         assertNull(WatermarkHooks.applyWatermarkFlags(new Object[13]));
     }

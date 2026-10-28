@@ -16,19 +16,26 @@ import io.github.libxposed.api.XposedModule;
 /**
  * AD-02 信息流广告过滤。
  *
- * 9.51.0 的信息流广告有两种来源（2026-10-24 DexSQL 复核，9.50.0 为 r7d.m0/m7d.s）：
+ * 9.52.0 的信息流广告有两种来源（2026-10-29 DexSQL 复核；9.51.0 为 l8d.m0/g8d.s，
+ * 9.50.0 为 r7d.m0/m7d.s）：
  *
  * 1) 开屏关联的首页第 2 位广告（2-pos）：客户端自己插，链路是
  *    AdsHomeFeedManagerServiceImpl.handleFeedDataIfNeed → recordAdsNoteData
- *    → … → Ll8d/m0.e0 插入。这一种旧 hook（只跳 handleFeedDataIfNeed）能覆盖。
+ *    → … → ExploreView.g0 插入。这一种旧 hook（只跳 handleFeedDataIfNeed）能覆盖。
  *
  * 2) **普通信息流广告**：服务端直接下发 NoteItemBean.isAd=true，客户端没有"插入广告"
  *    的方法可拦，只能在列表层过滤。旧 hook 对这类完全无效。
  *
  * 本类两层都做：
- * - 2-pos：跳 handleFeedDataIfNeed + recordAdsNoteData，并守卫 m0.e0。
- * - 普通广告：在 m0.Q / m0.A0 / g8d.s.Yd 调用原方法前，从入参 ArrayList 移除
- *   isAd==true 的项。只动列表内容，不动游标，分页不受影响。
+ * - 2-pos：跳 handleFeedDataIfNeed + recordAdsNoteData，并守卫 ExploreView.g0。
+ * - 普通广告：在 ExploreView.S / ExploreView.C0 / vha.s.Pd 调用原方法前，从入参
+ *   ArrayList 移除 isAd==true 的项。只动列表内容，不动游标，分页不受影响。
+ *
+ * 9.52.0 方法名映射（同一方法体、同一签名形状，DexSQL 反汇编比对）：
+ *   l8d/m0#Q  → ExploreView#S   （日志 "appendResponseNoteWithCache"）
+ *   l8d/m0#A0 → ExploreView#C0  （日志 "showRefreshNoteList"）
+ *   l8d/m0#e0 → ExploreView#g0  （插入动画，调用 getRecyclerView）
+ *   g8d/s#Yd  → vha/s#Pd        （Z, ArrayList, 回调 三参不变）
  *
  * isAd 是 NoteItemBean 的**字段**（不是 getter）：Lcom/xingin/entities/NoteItemBean;->isAd:Z。
  */
@@ -38,10 +45,11 @@ final class FeedAdHooks {
     private static final String RECORD_METHOD = "recordAdsNoteData";
     private static final String HANDLE_METHOD = "handleFeedDataIfNeed";
 
-    /** 首页列表实现（混淆类）：追加/刷新/插入。9.50.0 为 r7d.m0。 */
-    private static final String FEED_LIST = "l8d.m0";
-    /** 分页上游（混淆类）。9.50.0 为 m7d.s。 */
-    private static final String FEED_PAGER = "g8d.s";
+    /** 首页信息流视图：追加/刷新/插入。9.52.0 恢复为真实类名；9.51.0 为 l8d.m0。 */
+    private static final String FEED_LIST =
+            "com.xingin.xhs.homepage.explorefeed.mainfeed.view.ExploreView";
+    /** 分页上游（混淆类）。9.52.0 为 vha.s；9.51.0 为 g8d.s。 */
+    private static final String FEED_PAGER = "vha.s";
 
     /** 按 NoteItemBean 子类缓存 isAd 字段；找不到时缓存 null 避免反复反射。 */
     private static final Map<Class<?>, Field> IS_AD = new HashMap<>();
@@ -57,7 +65,7 @@ final class FeedAdHooks {
         try {
             installTwoPosition(module, cl, f);
             installListFilter(module, cl, f);
-            HookState.note(f, "2-pos（handleFeedDataIfNeed/recordAdsNoteData/m0.e0）+ 普通广告列表过滤（m0.Q/m0.A0/g8d.s.Yd）");
+            HookState.note(f, "2-pos（handleFeedDataIfNeed/recordAdsNoteData/ExploreView.g0）+ 普通广告列表过滤（ExploreView.S/C0、vha.s.Pd）");
         } catch (Throwable t) {
             HookKit.error(module, f.id + " install aborted", t);
             HookState.note(f, "安装异常");
@@ -77,18 +85,18 @@ final class FeedAdHooks {
         HookKit.install(module, f, RECORD_METHOD, record, HookKit.skipVoid(module, f, RECORD_METHOD));
 
         Class<?> feed = HookKit.findClass(module, f, cl, FEED_LIST);
-        Method insert = HookKit.findByNameAndArity(feed, "e0", 2);
-        HookKit.install(module, f, "m0.e0", insert, new XposedInterface.Hooker() {
+        Method insert = HookKit.findByNameAndArity(feed, "g0", 2);
+        HookKit.install(module, f, "ExploreView.g0", insert, new XposedInterface.Hooker() {
             @Override
             public Object intercept(XposedInterface.Chain chain) throws Throwable {
                 try {
                     Object note = chain.getArg(1);
                     if (note != null && isAd(note)) {
-                        HookKit.hit(module, f, "m0.e0 blocked ad insert");
+                        HookKit.hit(module, f, "ExploreView.g0 blocked ad insert");
                         return null;
                     }
                 } catch (Throwable t) {
-                    HookKit.error(module, f.id + " intercept error m0.e0", t);
+                    HookKit.error(module, f.id + " intercept error ExploreView.g0", t);
                 }
                 return chain.proceed();
             }
@@ -99,17 +107,17 @@ final class FeedAdHooks {
     private static void installListFilter(XposedModule module, ClassLoader cl, Feature f) {
         Class<?> feed = HookKit.findClass(module, f, cl, FEED_LIST);
         if (feed != null) {
-            HookKit.install(module, f, "m0.Q", HookKit.findByNameAndArity(feed, "Q", 1),
-                    dropAdsHook(module, f, "m0.Q", 0));
-            HookKit.install(module, f, "m0.A0", HookKit.findByNameAndArity(feed, "A0", 2),
-                    dropAdsHook(module, f, "m0.A0", 0));
+            HookKit.install(module, f, "ExploreView.S", HookKit.findByNameAndArity(feed, "S", 1),
+                    dropAdsHook(module, f, "ExploreView.S", 0));
+            HookKit.install(module, f, "ExploreView.C0", HookKit.findByNameAndArity(feed, "C0", 2),
+                    dropAdsHook(module, f, "ExploreView.C0", 0));
         }
         Class<?> pager = HookKit.findClass(module, f, cl, FEED_PAGER);
         if (pager != null) {
-            // Yd(boolean isRefresh, ArrayList pageData, 回调)：9.51.0 起列表从参数 0 移到参数 1
-            // （参数 0 变成 isRefresh 布尔），列表经回调 onSuccess 交给 m0.A0。
-            HookKit.install(module, f, "g8d.s.Yd", HookKit.findByNameAndArity(pager, "Yd", 3),
-                    dropAdsHook(module, f, "g8d.s.Yd", 1));
+            // Pd(boolean isRefresh, ArrayList pageData, 回调)：9.51.0 起列表从参数 0 移到参数 1
+            // （参数 0 变成 isRefresh 布尔），列表经回调 onSuccess 交给 ExploreView.C0。
+            HookKit.install(module, f, "vha.s.Pd", HookKit.findByNameAndArity(pager, "Pd", 3),
+                    dropAdsHook(module, f, "vha.s.Pd", 1));
         }
     }
 

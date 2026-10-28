@@ -13,9 +13,10 @@ import io.github.libxposed.api.XposedModule;
 /**
  * AD-05 搜索广告过滤。
  *
- * 9.51.0 的搜索结果广告插入点在 Lhl0/f0.o(...)Ljava/util/List;
- * （9.50.0 为 Lfl0/f0.o，签名不变；遍历 response.items，modelType=="ads" 时取
- * alioth.entities.c.getAds() 塞进返回列表）。广告实体仍是
+ * 9.52.0 的搜索结果广告插入点在数据层实现 Lpc0/c0.o(...)Ljava/util/List;
+ * （9.51.0 为 Lhl0/f0.o，9.50.0 为 Lfl0/f0.o；
+ * 方法签名形状与方法体一致，仅混淆类型/包名变化）。遍历 response.items，
+ * modelType=="ads" 时取 alioth.entities.c.getAds() 塞进返回列表。广告实体仍是
  * Lcom/xingin/alioth/entities/i;（继承 alioth.entities.c，未改名）。
  *
  * 做法：调用原方法后过滤返回值。在数据层删掉，UI 不会留下空白卡片；
@@ -23,7 +24,7 @@ import io.github.libxposed.api.XposedModule;
  */
 final class SearchAdHooks {
 
-    private static final String CLAZZ = "hl0.f0";
+    private static final String CLAZZ = "pc0.c0";
     private static final String METHOD = "o";
     private static final String AD_ENTITY = "com.xingin.alioth.entities.i";
 
@@ -42,7 +43,7 @@ final class SearchAdHooks {
                 return;
             }
             Method m = HookKit.findByNameAndArity(cls, METHOD, 4);
-            HookKit.install(module, f, "hl0.f0#o", m, filterHook(module, f, ad));
+            HookKit.install(module, f, "pc0.c0#o", m, filterHook(module, f, ad));
             HookState.note(f, "搜索仓库返回列表过滤 alioth.entities.i");
         } catch (Throwable t) {
             HookKit.error(module, f.id + " install aborted", t);
@@ -72,7 +73,7 @@ final class SearchAdHooks {
                     }
                 }
             } catch (Throwable t) {
-                HookKit.error(module, f.id + " intercept error hl0.f0#o", t);
+                HookKit.error(module, f.id + " intercept error pc0.c0#o", t);
             }
             return result;
         };

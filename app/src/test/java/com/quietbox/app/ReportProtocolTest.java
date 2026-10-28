@@ -140,7 +140,7 @@ public class ReportProtocolTest {
         assertEquals("旧状态应计入失败", 1, failedCount(store.get(regKey), store.get(skipKey), oldHit));
 
         // 本次会话成功注册：snapshot 发送 reg=label、skip=""，provider 用最新值覆盖。
-        store.put(regKey, ReportProtocol.mergeText(store.get(regKey), "m0#e0"));
+        store.put(regKey, ReportProtocol.mergeText(store.get(regKey), "ExploreView#g0"));
         store.put(skipKey, ReportProtocol.mergeText(store.get(skipKey), ""));
         // 本次没有新 hit 回传：空值不能覆盖历史 hit。
         long hitAfter = ReportProtocol.mergeHit(oldHit, 0L);
@@ -155,22 +155,22 @@ public class ReportProtocolTest {
     public void missingRegStillCountsAsFailureWhenReported() {
         assertEquals(1, failedCount("", "方法未找到 x", 0L));
         assertEquals(1, failedCount("", "", 3L)); // 有 hit 回传但无注册标签
-        assertEquals(0, failedCount("m0#e0", "", 3L));
+        assertEquals(0, failedCount("ExploreView#g0", "", 3L));
         assertEquals(0, failedCount(null, null, 0L)); // 无回传不计入
     }
 
     /** 可选锚点（方法）缺失：已有主锚点注册时不算失败，skip 仍保留给诊断页。 */
     @Test
     public void optionalSkipWithRegistrationIsNotFailure() {
-        assertFalse(ReportProtocol.featureFailed("m0#e0", "方法未找到 x", false, 0L));
-        assertFalse(ReportProtocol.featureFailed("m0#e0|g8d.s#Yd", "方法未找到 x", false, 3L));
+        assertFalse(ReportProtocol.featureFailed("ExploreView#g0", "方法未找到 x", false, 0L));
+        assertFalse(ReportProtocol.featureFailed("ExploreView#g0|vha.s#Pd", "方法未找到 x", false, 3L));
     }
 
     /** 主锚点（类）缺失：即使已有其它注册标签，也必须计入失败。 */
     @Test
     public void criticalSkipIsFailure() {
-        assertTrue(ReportProtocol.featureFailed("m0#e0", "类未找到 x", true, 0L));
-        assertTrue(ReportProtocol.featureFailed("m0#e0", "类未找到 x", true, 5L));
+        assertTrue(ReportProtocol.featureFailed("ExploreView#g0", "类未找到 x", true, 0L));
+        assertTrue(ReportProtocol.featureFailed("ExploreView#g0", "类未找到 x", true, 5L));
         assertTrue("critical 标记本身就算有回传",
                 ReportProtocol.featureFailed("", "", true, 0L));
     }

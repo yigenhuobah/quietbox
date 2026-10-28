@@ -24,15 +24,17 @@ import io.github.libxposed.api.XposedModule;
  *
  * 2026-10-16 DexSQL 复核（报告 E:\tmp-xhs-mod\agy-scratch\verify_p1_9.md）：
  * 旧实现挂在混淆类 e2c.i 上（跨版本会被 R8 重命名，脆弱），且只覆盖 note 详情页。
- * 真实链路：所有"复制链接"表面 → Lo92/q.a(ctx,"ug-share-copy-link",text)
- *   → Lp52/a → Lu0b/e.b（全 App 剪贴板写入收口）
+ * 真实链路：所有"复制链接"表面 → Lredutils/q.a(ctx,"ug-share-copy-link",text)
+ *   → Lp52/a → Ljv8/e.b（全 App 剪贴板写入收口）
  *   → SPI IClipboardProxy.setPrimaryClip → ClipboardProxyImpl.setPrimaryClip（非混淆实现）。
- * 9.51.0 起 j92/q 改名 o92/q、e0b/e 改名 u0b/e，方法签名均不变。
+ * 9.52.0：String 收口恢复为真实类名 com.xingin.android.redutils.q（9.51.0 为 o92/q，
+ * 9.50.0 为 j92/q）；写入点改名为 jv8/e（9.51.0 为 u0b/e，9.50.0 为 e0b/e）。
+ * 两处方法名/签名均不变。
  *
  * 新挂载点（按稳定性排序）：
  * 1) 主挂 ClipboardProxyImpl#setPrimaryClip —— 非混淆、剪贴板写入唯一收口，
  *    覆盖所有复制链接表面及未来新增；按 ClipData 文本净化，非 URL / 无追踪参数时原样返回。
- * 2) 副挂 o92/q#a —— 所有"复制链接"的 String 收口（label 过滤 "ug-share-copy-link"），
+ * 2) 副挂 redutils/q#a —— 所有"复制链接"的 String 收口（label 过滤 "ug-share-copy-link"），
  *    String 级精确净化，与旧 urlArgHook 同构。
  * 旧 e2c.i 硬编码已移除（不再依赖混淆类名）。
  *
@@ -42,11 +44,11 @@ import io.github.libxposed.api.XposedModule;
  */
 final class CopyLinkHooks {
 
-    /** 剪贴板真正写入点：u0b/e.b(ClipboardManager, ClipData) —— 全 APK 唯一调 ClipboardManager.setPrimaryClip 的地方。9.50.0 为 e0b.e。 */
-    private static final String CLIP_WRITER = "u0b.e";
+    /** 剪贴板真正写入点：jv8/e.b(ClipboardManager, ClipData) —— 全 APK 唯一调 ClipboardManager.setPrimaryClip 的地方。9.51.0 为 u0b.e。 */
+    private static final String CLIP_WRITER = "jv8.e";
 
-    /** 所有"复制链接"的 String 收口（混淆，作主挂失效时的兜底）。9.50.0 为 j92.q。 */
-    private static final String COPY_FUNNEL = "o92.q";
+    /** 所有"复制链接"的 String 收口（9.52.0 恢复真实类名，作主挂失效时的兜底）。9.51.0 为 o92.q。 */
+    private static final String COPY_FUNNEL = "com.xingin.android.redutils.q";
     private static final String COPY_LABEL = "ug-share-copy-link";
 
     private static final String[] TRACKING = {"share_id", "xhsshare", "shareRedId", "apptime", "sid"};
@@ -73,21 +75,21 @@ final class CopyLinkHooks {
     static void install(XposedModule module, ClassLoader cl, boolean stripXsecToken) {
         Feature f = Feature.COPY_LINK_SANITIZE;
         try {
-            // 主挂：真正的剪贴板写入点 u0b/e.b。ClipboardProxyImpl.setPrimaryClip 只是 SPI
+            // 主挂：真正的剪贴板写入点 jv8/e.b。ClipboardProxyImpl.setPrimaryClip 只是 SPI
             // 回调（只打日志、不写剪贴板），在那里改 ClipData 对剪贴板零效果，已弃用。
             Class<?> writer = HookKit.findClass(module, f, cl, CLIP_WRITER);
             Method write = HookKit.findMethod(module, f, writer, "b",
                     ClipboardManager.class, ClipData.class);
-            HookKit.install(module, f, "u0b.e#b(setPrimaryClip)",
+            HookKit.install(module, f, "jv8.e#b(setPrimaryClip)",
                     write, clipDataHook(module, f, stripXsecToken));
 
             // 副挂/兜底：所有"复制链接"的 String 收口。主挂是混淆类，被 R8 重命名时靠它兜底。
             Class<?> funnel = HookKit.findClass(module, f, cl, COPY_FUNNEL);
             Method a = HookKit.findMethodQuiet(module, f, funnel, "a",
                     Context.class, CharSequence.class, CharSequence.class);
-            HookKit.install(module, f, "o92.q#a", a, funnelHook(module, f, stripXsecToken));
+            HookKit.install(module, f, "redutils/q#a", a, funnelHook(module, f, stripXsecToken));
 
-            HookState.note(f, "剪贴板写入点 u0b.e#b（主挂）+ 复制链接 String 收口 o92.q#a（兜底，label=" + COPY_LABEL + "）");
+            HookState.note(f, "剪贴板写入点 jv8.e#b（主挂）+ 复制链接 String 收口 redutils/q#a（兜底，label=" + COPY_LABEL + "）");
         } catch (Throwable t) {
             HookKit.error(module, f.id + " install aborted", t);
             HookState.note(f, "安装异常");
@@ -109,7 +111,7 @@ final class CopyLinkHooks {
                     }
                 }
             } catch (Throwable t) {
-                HookKit.error(module, f.id + " intercept error u0b.e#b", t);
+                HookKit.error(module, f.id + " intercept error jv8.e#b", t);
             }
             return replaced == null ? chain.proceed() : chain.proceed(replaced);
         };
@@ -140,7 +142,7 @@ final class CopyLinkHooks {
             return out;
     }
 
-    /** 副挂：o92/q.a(Context, label, text)，只对 label == "ug-share-copy-link" 的复制链接生效。 */
+    /** 副挂：redutils/q.a(Context, label, text)，只对 label == "ug-share-copy-link" 的复制链接生效。 */
     private static XposedInterface.Hooker funnelHook(XposedModule module, Feature f, boolean stripToken) {
         return chain -> {
             Object[] replaced = null;
@@ -149,7 +151,7 @@ final class CopyLinkHooks {
                 if (args.size() >= 3) {
                     Object label = args.get(1);
                     Object text = args.get(2);
-                    seen(module, f, "o92.q.a label=" + label);
+                    seen(module, f, "redutils/q.a label=" + label);
                     if (label instanceof CharSequence && text instanceof String
                             && label.toString().contains(COPY_LABEL)) {
                         String raw = (String) text;
@@ -157,12 +159,12 @@ final class CopyLinkHooks {
                         if (!clean.equals(raw)) {
                             replaced = args.toArray();
                             replaced[2] = clean;
-                            HookKit.hit(module, f, "o92.q.a removed=" + removedKeys(raw, stripToken));
+                            HookKit.hit(module, f, "redutils/q.a removed=" + removedKeys(raw, stripToken));
                         }
                     }
                 }
             } catch (Throwable t) {
-                HookKit.error(module, f.id + " intercept error o92.q.a", t);
+                HookKit.error(module, f.id + " intercept error redutils/q.a", t);
             }
             return replaced == null ? chain.proceed() : chain.proceed(replaced);
         };

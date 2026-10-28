@@ -17,7 +17,8 @@ import io.github.libxposed.api.XposedModule;
 /**
  * AD-08/09/10 信息流直播卡、带货卡、投票卡过滤。
  *
- * 复用 AD-02 已验证的列表过滤链路（l8d/m0#Q、#A0、g8d/s#Yd，见 FeedAdHooks；9.50.0 为 r7d/m0、m7d/s），
+ * 复用 AD-02 已验证的列表过滤链路（9.52.0 为 ExploreView#S/#C0、vha/s#Pd；
+ * 9.51.0 为 l8d/m0#Q、#A0、g8d/s#Yd，见 FeedAdHooks），
  * 只动列表内容、不动游标，分页不受影响。三个功能各挂各的谓词，互不依赖。
  *
  * 判定优先用 NoteItemBean.modelType 字符串：modelType 非空时只按类型判定；
@@ -25,14 +26,15 @@ import io.github.libxposed.api.XposedModule;
  * modelType 到卡片类型的取值映射需真机日志确认（见 logModelType）。
  * 投票卡没有字段兜底。
  *
- * 注意：只挂首页信息流的 Q/A0/Yd 路径（已验证调用面），不碰详情连播链路。
+ * 注意：只挂首页信息流的 S/C0/Pd 路径（已验证调用面），不碰详情连播链路。
  */
 final class FeedCardHooks {
 
-    /** 首页列表实现（混淆类）：追加/刷新/插入。9.50.0 为 r7d.m0。 */
-    private static final String FEED_LIST = "l8d.m0";
-    /** 分页上游（混淆类）。9.50.0 为 m7d.s。 */
-    private static final String FEED_PAGER = "g8d.s";
+    /** 首页信息流视图：追加/刷新/插入。9.52.0 恢复为真实类名；9.51.0 为 l8d.m0。 */
+    private static final String FEED_LIST =
+            "com.xingin.xhs.homepage.explorefeed.mainfeed.view.ExploreView";
+    /** 分页上游（混淆类）。9.52.0 为 vha.s；9.51.0 为 g8d.s。 */
+    private static final String FEED_PAGER = "vha.s";
 
     /** NoteItemBean.modelType 字段缓存；null 表示该类没有这个字段。 */
     private static final Map<Class<?>, Field> MODEL_TYPE = new HashMap<>();
@@ -74,19 +76,19 @@ final class FeedCardHooks {
         try {
             Class<?> feed = HookKit.findClass(module, f, cl, FEED_LIST);
             if (feed != null) {
-                HookKit.install(module, f, "m0.Q",
-                        HookKit.findByNameAndArity(feed, "Q", 1),
-                        dropHook(module, f, "m0.Q", 0, kind));
-                HookKit.install(module, f, "m0.A0",
-                        HookKit.findByNameAndArity(feed, "A0", 2),
-                        dropHook(module, f, "m0.A0", 0, kind));
+                HookKit.install(module, f, "ExploreView.S",
+                        HookKit.findByNameAndArity(feed, "S", 1),
+                        dropHook(module, f, "ExploreView.S", 0, kind));
+                HookKit.install(module, f, "ExploreView.C0",
+                        HookKit.findByNameAndArity(feed, "C0", 2),
+                        dropHook(module, f, "ExploreView.C0", 0, kind));
             }
             Class<?> pager = HookKit.findClass(module, f, cl, FEED_PAGER);
             if (pager != null) {
-                // 9.51.0 起 Yd 的列表参数从 0 移到 1（参数 0 变成 isRefresh），见 FeedAdHooks。
-                HookKit.install(module, f, "g8d.s.Yd",
-                        HookKit.findByNameAndArity(pager, "Yd", 3),
-                        dropHook(module, f, "g8d.s.Yd", 1, kind));
+                // 9.51.0 起 Pd 的列表参数从 0 移到 1（参数 0 变成 isRefresh），见 FeedAdHooks。
+                HookKit.install(module, f, "vha.s.Pd",
+                        HookKit.findByNameAndArity(pager, "Pd", 3),
+                        dropHook(module, f, "vha.s.Pd", 1, kind));
             }
         } catch (Throwable t) {
             HookKit.error(module, f.id + " install aborted", t);

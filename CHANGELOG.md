@@ -1,5 +1,29 @@
 # 更新日志
 
+## 未发布 — 适配小红书 9.52.0（9520807）
+
+只更新工作区代码/脚本/测试，未 commit、未 bump versionName/versionCode、未发版。
+
+### 变更
+
+- 按 9.52.0 APK 重新定位 11 个混淆锚点（DexSQL 结构比对，方法体/签名形状一致）：
+  - 信息流：`l8d/m0#Q/#A0/#e0` → `ExploreView#S/#C0/#g0`；`g8d/s#Yd` → `vha/s#Pd`
+  - 外跳汇聚：`k1e/i0#b` → `XYWebViewUtil#b`
+  - 剪贴板：`u0b/e#b` → `jv8/e#b`；复制链接收口 `o92/q#a` → `redutils/q#a`
+  - 水印：`ce8/j#a` → `jn6/j#a`；`ce8/i#i` → `jn6/i#i`（旧 ce8 类名被 R8 复用给无关 lambda）
+  - 搜索广告：`hl0/f0#o` → `pc0/c0#o`
+  - EX-01：`sr9/o#invoke` → `yr7/o#invoke`
+  - AB：`tq/h#f/#b` → `XYExperimentImpl#f/#b`；`mb6/o#l` → `XYConfigCenterImpl#l`
+- `VersionGate` 适配版本改为 9.52.0 / 9520807。
+- EX-01 取值改为 NoteFeed 字段优先（`modelType`/`id`），旧混淆 getter `c1`/`u0` 仅作兜底：9.52.0 中这两个 getter 的返回类型已被 R8 改掉。
+- `tools/check-mounts.sh` MOUNTS 表与版本提示同步到 9.52.0。
+
+### 验证
+
+- `tools/check-mounts.sh` 对 9.52.0 体检：GONE/SIG = 0（58/58 OK）。
+- `./gradlew :app:testDebugUnitTest :app:lintDebug --no-daemon` 通过：单测 98 项全部通过（0 失败 / 0 跳过，新增 6 项 `NoteUnavailableHooks.readString` 用例）；lint 0 errors / 23 warnings（均为既有 warning）。
+- 本版本尚未真机验证，所有 hook 需按 `docs/DEVELOPMENT.md` 逐项回归。
+
 ## v0.8.1 — 2026-10-28
 
 修复旧会话诊断数据残留导致「N 项功能未生效」误报。

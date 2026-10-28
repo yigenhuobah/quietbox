@@ -6,7 +6,7 @@
 #
 # 参数优先级：CLI > 环境变量 > 常见安装路径。
 # 环境变量：
-#   TARGET_APK / APK  目标 APK（小红书 9.51.0）
+#   TARGET_APK / APK  目标 APK（小红书 9.52.0）
 #   DEXSQL            dexsql 可执行文件
 #   AAPT2             aapt2 可执行文件（可选，仅用于显示 APK versionName）
 #
@@ -37,7 +37,7 @@ Usage:
   tools/check-mounts.sh [APK_PATH] [--apk APK] [--dexsql PATH] [--aapt2 PATH]
 
 Arguments:
-  APK_PATH / --apk   目标 APK（小红书 9.51.0）；也可用 TARGET_APK / APK
+  APK_PATH / --apk   目标 APK（小红书 9.52.0）；也可用 TARGET_APK / APK
   --dexsql PATH      dexsql 可执行文件；也可用 DEXSQL
   --aapt2 PATH       aapt2 可执行文件；也可用 AAPT2（可选，仅显示 versionName）
   -h, --help         显示本帮助
@@ -208,8 +208,8 @@ if is_executable_file "$AAPT2"; then
         | sed -n "s/.*versionName='\([^']*\)'.*/\1/p" | head -1)"
     if [ -n "$VERSION_NAME" ]; then
         echo "versionName: $VERSION_NAME"
-        [ "$VERSION_NAME" = "9.51.0" ] \
-            || echo "WARN: expected 9.51.0, got $VERSION_NAME" >&2
+        [ "$VERSION_NAME" = "9.52.0" ] \
+            || echo "WARN: expected 9.52.0, got $VERSION_NAME" >&2
     else
         echo "WARN: cannot read versionName from $TARGET_APK" >&2
     fi
@@ -276,28 +276,28 @@ Lcom/xingin/advert/intersitial/ui/InterstitialAdsActivity$a;|a|P0-1 插屏开屏
 Lcom/xingin/advert/intersitial/ui/SplashAdPlaceHolderView;|onCreateView|P0-1 冷启动占位|splash_ad_path|
 Lcom/xingin/advert/spi/AdsHomeFeedManagerServiceImpl;|handleFeedDataIfNeed|P0-2 2-pos 比对|verify_p0_2|
 Lcom/xingin/advert/spi/AdsHomeFeedManagerServiceImpl;|recordAdsNoteData|P0-2 2-pos 记录|verify_p0_2|
-Ll8d/m0;|e0|P0-2 广告插入守卫|verify_p0_2|
-Ll8d/m0;|Q|P0-2 列表追加过滤|verify_p0_2|
-Ll8d/m0;|A0|P0-2 列表刷新过滤|verify_p0_2|
-Lg8d/s;|Yd|P0-2 分页上游过滤|verify_p0_2|
+Lcom/xingin/xhs/homepage/explorefeed/mainfeed/view/ExploreView;|g0|P0-2 广告插入守卫|verify_p0_2|2
+Lcom/xingin/xhs/homepage/explorefeed/mainfeed/view/ExploreView;|S|P0-2 列表追加过滤|verify_p0_2|1
+Lcom/xingin/xhs/homepage/explorefeed/mainfeed/view/ExploreView;|C0|P0-2 列表刷新过滤|verify_p0_2|2
+Lvha/s;|Pd|P0-2 分页上游过滤|verify_p0_2|3
 Lcom/xingin/advert/spi/AdsCommentComponentBinderCreatorImpl;|commentAdvertComponentDSLEnable|P0-3 评论广告|specs|
 Lcom/xingin/update/UpdateDialogActivity;|onCreate|P0-4 更新弹窗|specs|
 Lcom/xingin/update/UpdateDialogActivity;|he|P0-4 更新弹窗补充|specs|
 Lcom/xingin/advert/spi/AdvertSpiImpl;|gotoExtApp|P1-7 外跳主挂|verify_p1_7|
-Lk1e/i0;|b|P1-7 外跳汇聚|verify_p1_7|
-Lu0b/e;|b|P1-9 剪贴板写入|verify_p1_9|
-Lo92/q;|a|P1-9 复制链接收口|verify_p1_9|
-Lce8/j;|a|P1-11 水印主挂|verify_watermark|6
-Lce8/i;|i|P1-11 水印入口|verify_watermark|11
+Lcom/xingin/xywebview/util/XYWebViewUtil;|b|P1-7 外跳汇聚|verify_p1_7|5
+Ljv8/e;|b|P1-9 剪贴板写入|verify_p1_9|2
+Lcom/xingin/android/redutils/q;|a|P1-9 复制链接收口|verify_p1_9|3
+Ljn6/j;|a|P1-11 水印主挂|verify_watermark|6
+Ljn6/i;|i|P1-11 水印入口|verify_watermark|11
 Lcom/xingin/entities/MediaSaveConfig;|c|P1-11 语义 getter|verify_watermark|
 Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateHelper;|isAutoPlayOpen|P1-12 自动播放|specs|
 Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateHelper;|isAutoPlayOpenServer|P1-12 自动播放|specs|
 Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateTabHelper;|isAutoPlayOpen|P1-12 自动播放|specs|
 Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateTabHelper;|isAutoPlayOpenServer|P1-12 自动播放|specs|
-Lhl0/f0;|o|P1-13 搜索广告|verify_p1_13|
+Lpc0/c0;|o|P1-13 搜索广告|verify_p1_13|4
 Lcom/xingin/matrix/notedetail/asyncwidgets/advert/AdvertV2View;|a|P1-14 详情广告条|verify_p1_14|
 Lcom/xingin/matrix/notedetail/asyncwidgets/advert/AdvertV2View;|b|P1-14 详情广告条|verify_p1_14|
-Lsr9/o;|invoke|P1-15 已删除笔记查看|verify_p1_15|
+Lyr7/o;|invoke|P1-15 已删除笔记查看|verify_p1_15|1
 Lcom/xingin/lurker/appscore/ui/AppScoreDialogActivity;|onCreate|P1-16 评分弹窗|verify_p1_16|
 Lcom/xingin/xhs/app/ShareApplication;|tryLaunchGpReview|P1-16 系统评分|verify_p1_16|
 Lcom/xingin/spi/IGrowthCupidProxyImpl;|pushGuideDialogDialogShow|P1-17 通知引导|verify_p1_17|
@@ -312,15 +312,15 @@ Lcom/xingin/login/manager/UploadContactServiceExtension;|start|P1-19 通讯录�
 Lcom/xingin/login/manager/UploadContactServiceExtension;|requestContactsSync|P1-19 通讯录同步|verify_p1_19|
 Lcom/xingin/login/manager/UploadContactServiceExtension;|installLifecycleObserver|P1-19 通讯录同步|verify_p1_19|
 Lcom/xingin/commercial/vision/post/spi/GoodsCommentAddInProcessor;|startAddIn|P1-20 评论带货|verify_p1_20|
-Ll8d/m0;|Q|P1-21/22/23 直播/带货/投票卡过滤|verify_p1_21|
-Ll8d/m0;|A0|P1-21/22/23 直播/带货/投票卡过滤|verify_p1_21|
-Lg8d/s;|Yd|P1-21/22/23 直播/带货/投票卡过滤|verify_p1_21|
-Ltq/h;|f|P2-1 AB 读取 getValueJustOnce|verify_p2_1|
-Ltq/h;|b|P2-1 AB 读取 getValue|verify_p2_1|
-Lmb6/o;|l|P2-1 ConfigCenter 取值|verify_p2_1|'
+Lcom/xingin/xhs/homepage/explorefeed/mainfeed/view/ExploreView;|S|P1-21/22/23 直播/带货/投票卡过滤|verify_p1_21|1
+Lcom/xingin/xhs/homepage/explorefeed/mainfeed/view/ExploreView;|C0|P1-21/22/23 直播/带货/投票卡过滤|verify_p1_21|2
+Lvha/s;|Pd|P1-21/22/23 直播/带货/投票卡过滤|verify_p1_21|3
+Lcom/xingin/abtest/impl/XYExperimentImpl;|f|P2-1 AB 读取 getValueJustOnce|verify_p2_1|3
+Lcom/xingin/abtest/impl/XYExperimentImpl;|b|P2-1 AB 读取 getValue|verify_p2_1|3
+Lcom/xingin/configcenter/XYConfigCenterImpl;|l|P2-1 ConfigCenter 取值|verify_p2_1|1'
 
-printf '%-8s %-64s %s\n' "状态" "挂载点" "功能"
-printf '%.0s-' {1..110}; echo
+printf '%-8s %-92s %s\n' "状态" "挂载点" "功能"
+printf '%.0s-' {1..140}; echo
 
 bad=0
 while IFS='|' read -r cls mth feat rep pc; do

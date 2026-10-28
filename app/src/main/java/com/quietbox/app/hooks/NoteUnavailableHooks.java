@@ -18,9 +18,13 @@ import io.github.libxposed.api.XposedModule;
  * 首屏已有的数据，只有服务端明确返回「错误页」模型时才把内容换掉。
  *
  * 服务端的错误页是 NoteFeed.modelType == "error"（资源字符串「当前内容无法展示」
- * 就是它的错误页）。NoteDetailRepository 的 map 阶段（混淆 lambda sr9.o，
- * 9.50.0 为 dr9.o，由 NoteDetailRepository.k 直接构造）会把这个
+ * 就是它的错误页）。NoteDetailRepository 的 map 阶段（混淆 lambda yr7.o，
+ * 9.51.0 为 sr9.o，9.50.0 为 dr9.o，由 NoteDetailRepository.k 直接构造）会把这个
  * 错误页包装成 DetailNoteFeedHolder 交给 UI。
+ *
+ * 9.52.0 起 NoteFeed 的混淆 getter 被 R8 重新分配（c1 变成返回 LiveShootingInfo，
+ * u0 变成返回 boolean），但 modelType / id 字段名稳定。因此取值优先读字段，
+ * 读不到才回退旧 getter；否则 EX-01 会静默失配。
  *
  * 处理方式：
  * 1. 仓库里还留着上一份正常 holder（同一 noteId）→ 直接返回它，页面内容不变；
@@ -32,8 +36,8 @@ import io.github.libxposed.api.XposedModule;
  */
 final class NoteUnavailableHooks {
 
-    /** 混淆 lambda：NoteDetailRepository 的 map 阶段。9.50.0 为 dr9.o。 */
-    private static final String LAMBDA = "sr9.o";
+    /** 混淆 lambda：NoteDetailRepository 的 map 阶段。9.52.0 为 yr7.o；9.51.0 为 sr9.o。 */
+    private static final String LAMBDA = "yr7.o";
     private static final String REPO = "com.xingin.matrix.notedetail.v3.repo.NoteDetailRepository";
     private static final String HOLDER = "com.xingin.notebase.entities.notedetail.DetailNoteFeedHolder";
     private static final String FEED = "com.xingin.entities.notedetail.NoteFeed";
@@ -129,12 +133,44 @@ final class NoteUnavailableHooks {
     }
 
     private static String modelType(Object feed) {
-        Object v = callNoArg(feed, "c1");
-        return v instanceof String ? (String) v : null;
+        return readString(feed, "modelType", "c1");
     }
 
     private static String noteId(Object feed) {
-        Object v = callNoArg(feed, "u0");
+        return readString(feed, "id", "u0");
+    }
+
+    /**
+     * 先读同名字段，再回退旧 getter（9.52.0 的 NoteFeed 混淆 getter c1/u0 已被
+     * R8 分配给别的返回值类型，字段名 modelType/id 反而是稳定的）。
+     * 只接受 String：字段存在但类型不符时返回 null，不做 String.valueOf 猜测。
+     */
+    static String readString(Object target, String fieldName, String getterName) {
+        if (target == null) {
+            return null;
+        }
+        try {
+            for (Class<?> c = target.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
+                Field fld;
+                try {
+                    fld = c.getDeclaredField(fieldName);
+                } catch (NoSuchFieldException ignored) {
+                    continue;
+                }
+                fld.setAccessible(true);
+                Object v = fld.get(target);
+                if (v instanceof String) {
+                    return (String) v;
+                }
+                if (v != null) {
+                    return null;
+                }
+                break; // 字段为 null：回退 getter
+            }
+        } catch (Throwable ignored) {
+            // 反射失败：回退 getter
+        }
+        Object v = callNoArg(target, getterName);
         return v instanceof String ? (String) v : null;
     }
 

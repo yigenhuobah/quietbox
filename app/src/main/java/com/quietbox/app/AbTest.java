@@ -71,7 +71,7 @@ public final class AbTest {
         return parseIntOrNull(forceValue);
     }
 
-    /** stringHook 路径上喂给 mb6.o#l（9.50.0 为 eb6.o#l）的字符串，按类型规整成 Gson 可解析的形式。 */
+    /** stringHook 路径上喂给 XYConfigCenterImpl#l（9.51.0 为 mb6.o#l，9.50.0 为 eb6.o#l）的字符串，按类型规整成 Gson 可解析的形式。 */
     public String forcedLiteral() {
         Object target = targetPrimitive();
         return target == null ? null : String.valueOf(target);
