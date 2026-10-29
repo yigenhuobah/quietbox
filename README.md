@@ -9,6 +9,8 @@
 > ⚠️ 本项目与小红书官方无任何关联，仅供学习、研究和个人设备使用。
 > 使用前请阅读文末的[免责声明](#免责声明)。
 
+**仓库**：<https://github.com/yigenhuobah/quietbox> ｜ **下载**：[Releases](https://github.com/yigenhuobah/quietbox/releases) ｜ **反馈**：[Issues](https://github.com/yigenhuobah/quietbox/issues/new/choose)
+
 ---
 
 ## 功能
