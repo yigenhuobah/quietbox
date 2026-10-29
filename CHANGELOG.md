@@ -1,12 +1,12 @@
 # 更新日志
 
-## 未发布 — 适配小红书 9.52.0（9520807）
+## 0.9.0 - 2026-10-29
 
-只更新工作区代码/脚本/测试，未 commit、未 bump versionName/versionCode、未发版。
+适配小红书 9.52.0（9520807）。**master 只支持 9.52.0，不再支持 9.51.0**：旧版本仍会 fail-open 运行并提示「未适配」，但挂载点未按旧版维护，大部分功能可能失效。
 
-### 变更
+### 适配
 
-- 按 9.52.0 APK 重新定位 11 个混淆锚点（DexSQL 结构比对，方法体/签名形状一致）：
+- 小红书 9.52.0 全量适配：按 9.52.0 APK 用 DexSQL 结构比对（方法体/签名形状一致）重定位 17 个 GONE/SIG 挂载点（14 个唯一锚点，信息流三项在 AD-02 与 AD-08/09/10 两处登记）：
   - 信息流：`l8d/m0#Q/#A0/#e0` → `ExploreView#S/#C0/#g0`；`g8d/s#Yd` → `vha/s#Pd`
   - 外跳汇聚：`k1e/i0#b` → `XYWebViewUtil#b`
   - 剪贴板：`u0b/e#b` → `jv8/e#b`；复制链接收口 `o92/q#a` → `redutils/q#a`
@@ -14,15 +14,45 @@
   - 搜索广告：`hl0/f0#o` → `pc0/c0#o`
   - EX-01：`sr9/o#invoke` → `yr7/o#invoke`
   - AB：`tq/h#f/#b` → `XYExperimentImpl#f/#b`；`mb6/o#l` → `XYConfigCenterImpl#l`
-- `VersionGate` 适配版本改为 9.52.0 / 9520807。
+- `VersionGate` 适配版本改为 9.52.0 / 9520807；`tools/check-mounts.sh` 的 MOUNTS 表与版本提示同步到 9.52.0，58 项全部补上参数个数（签名形状）校验。
 - EX-01 取值改为 NoteFeed 字段优先（`modelType`/`id`），旧混淆 getter `c1`/`u0` 仅作兜底：9.52.0 中这两个 getter 的返回类型已被 R8 改掉。
-- `tools/check-mounts.sh` MOUNTS 表与版本提示同步到 9.52.0。
+
+### 修复
+
+- EX-01 使用 PASSTHROUGH 异常模式：hook 内抛出 `IOException` 时原样传给宿主调用方，让 RxJava 走 `onError` 的离线/错误分支；其余 hook 仍保持 PROTECTIVE。
+- 旧会话诊断残留：`HookState.enable` 现在创建空 State，已启用但安装阶段完全没有 touch 的功能也会回传空 `reg`/`skip`，清掉上一会话的旧 skip；水印挂载点全部缺失时改用 `markNotFound` 记录。
+- 诊断回传区分 critical skip：只有类级主锚点缺失才计入失败横幅，方法级 skip 只用于诊断展示，避免可选方法改名就把整个功能判死。
+- 回传增加 `meta.session` 会话标识与 `meta.updated_at` 落盘时间：新会话首次写入前清空上一会话的 `reg`/`hit`/`skip`/`crit`，迟到的旧会话整批丢弃，不能覆盖新会话。
+- 回传增加 10 分钟 TTL：超时未更新按「未知」处理，失败计数归零；内容无变化时每 60 秒发一次心跳刷新 `meta.updated_at`，避免正常会话被误判过期。
+- provider 调用改为有界单线程池 + 2 秒超时（超时取消），模块 App 卡死时不会永久阻塞诊断线程；失败仍按 60 秒退避。
+- PV-03 只净化小红书链接：仅 `xiaohongshu.com` / `xhslink.com` / `xhslink.cn` / `xhs.cn` 及其子域，或 label 为 `ug-share-copy-link` 的复制生效；未知 host 与非 http(s) 文本原样放行，避免用户复制外部链接时误删 `sid` 等通用参数。
+- PV-03 参数名解码改用 JDK `URLDecoder`，不再依赖 `android.net.Uri#decode`（JVM 单测里是 stub）。
+
+### 变更
+
+- Phase 3 配置写入：`ConfigStore` / `AbConfigStore` 的 `commit()` 统一排到后台单线程（`ConfigWrites`），主线程不再做磁盘/binder I/O；remote prefs 不可用时直接拒绝，不再回退本地冒充成功。
+- 写入结果以真实 `commit()` 为准：设置页与 AB 面板先乐观显示，失败回调回滚 UI 并 Toast；每个 key 用写入序号防止旧回调覆盖新状态；`store` 在同一 service 实例内复用，换绑后重建。
+- 设置页后台 I/O：状态卡读取、`failedFeatureCount` 统计与 AB 全量导出均移出主线程，结果回主线程并校验序号/目标版本，避免旋转或重复刷新时旧结果覆盖新界面。
+- `tools/check-mounts.sh` 缓存指纹改为 APK 路径 + 大小 + mtime + SHA-256：同路径替换 APK 或旧版只有路径的 META 都会自动重建缓存。
+- 修正 CHANGELOG 中 0.8.1 的 APK SHA-256 记录。
 
 ### 验证
 
-- `tools/check-mounts.sh` 对 9.52.0 体检：GONE/SIG = 0（58/58 OK）。
-- `./gradlew :app:testDebugUnitTest :app:lintDebug --no-daemon` 通过：单测 98 项全部通过（0 失败 / 0 跳过，新增 6 项 `NoteUnavailableHooks.readString` 用例）；lint 0 errors / 23 warnings（均为既有 warning）。
-- 本版本尚未真机验证，所有 hook 需按 `docs/DEVELOPMENT.md` 逐项回归。
+- `./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleRelease --no-daemon` 通过：单测 108 项全部通过（0 失败 / 0 跳过）；lint 0 errors / 23 warnings（均为既有 warning）。
+- `tools/verify-apk.sh` 17 项全部通过：versionCode=14、versionName=0.9.0、签名证书与 APK SHA-256。
+- `tools/check-mounts.sh` 对小红书 9.52.0 体检：58/58 OK，GONE/SIG=0。
+- 本版本尚未真机验证，所有 hook 需按 `docs/DEVELOPMENT.md` 逐项回归；EX-01 与 AD-04 本轮未在真机覆盖。
+
+### 已知限制
+
+- AD-05 只过滤搜索结果中 `alioth.entities.i` 广告实体，品牌广告卡不在覆盖范围。
+- EX-01 真实被删笔记场景、AD-04 广告外跳未真机验证，不据此宣称通过。
+- 小红书 9.51.0 不再支持，请升级到 9.52.0（9520807）。
+
+APK: quietbox-0.9.0.apk
+versionCode: 14
+大小: 2,907,238 字节
+SHA-256: c780fb14e00654db5bb4cfa162e069274302be76e4484646c15d0dd2dc74452d
 
 ## v0.8.1 — 2026-10-28
 
