@@ -9,6 +9,7 @@
 #   --dry-run      只打印将执行的命令，不构建、不改 git
 #   --skip-tests   跳过 :app:testDebugUnitTest
 #   --skip-lint    跳过 :app:lintDebug
+#   --skip-build   跳过 clean/构建，使用现有 APK
 #   --no-tag       不创建源码 tag
 #   --no-push      不 push（源码 tag / 官方仓）
 #   --no-release   不创建 GitHub Release
@@ -26,6 +27,7 @@ LOCAL_ONLY=0
 DRY_RUN=0
 SKIP_TESTS=0
 SKIP_LINT=0
+SKIP_BUILD=0
 NO_TAG=0
 NO_PUSH=0
 NO_RELEASE=0
@@ -79,6 +81,7 @@ while [ $# -gt 0 ]; do
         --dry-run) DRY_RUN=1 ;;
         --skip-tests) SKIP_TESTS=1 ;;
         --skip-lint) SKIP_LINT=1 ;;
+        --skip-build) SKIP_BUILD=1 ;;
         --no-tag) NO_TAG=1 ;;
         --no-push) NO_PUSH=1 ;;
         --no-release) NO_RELEASE=1 ;;
@@ -166,19 +169,23 @@ MAPPING="$ROOT_DIR/app/build/outputs/mapping/release/mapping.txt"
 ARTIFACT_DIR="$ROOT_DIR/app/build/release-artifacts/${VERSION}"
 
 # ---------- 构建 ----------
-GRADLE_ARGS=(clean)
-if [ "$SKIP_TESTS" -eq 0 ]; then
-    GRADLE_ARGS+=(:app:testDebugUnitTest)
+if [ "$SKIP_BUILD" -eq 1 ]; then
+    log "--skip-build：跳过构建，使用现有 APK"
 else
-    log "--skip-tests：跳过单元测试"
+    GRADLE_ARGS=(clean)
+    if [ "$SKIP_TESTS" -eq 0 ]; then
+        GRADLE_ARGS+=(:app:testDebugUnitTest)
+    else
+        log "--skip-tests：跳过单元测试"
+    fi
+    if [ "$SKIP_LINT" -eq 0 ]; then
+        GRADLE_ARGS+=(:app:lintDebug)
+    else
+        log "--skip-lint：跳过 lint"
+    fi
+    GRADLE_ARGS+=(:app:assembleRelease)
+    run ./gradlew "${GRADLE_ARGS[@]}" --console=plain
 fi
-if [ "$SKIP_LINT" -eq 0 ]; then
-    GRADLE_ARGS+=(:app:lintDebug)
-else
-    log "--skip-lint：跳过 lint"
-fi
-GRADLE_ARGS+=(:app:assembleRelease)
-run ./gradlew "${GRADLE_ARGS[@]}" --console=plain
 
 if [ "$DRY_RUN" -eq 1 ]; then
     printf '[dry-run] bash %s %s --expected-version %s --expected-code %s --out-dir %s\n' \
