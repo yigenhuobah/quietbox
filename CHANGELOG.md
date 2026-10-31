@@ -1,36 +1,49 @@
 # 更新日志
 
-## 0.9.1 - 未发布（实验）
+## 0.9.1 - 2026-10-31
 
-新增实验性功能：实况图（Live Photo）保存去水印（EN-03）。**本项为 Issue #3 承诺的可行性验证版本，未做真机验证，不要据此宣称已支持。**
+新增 EN-03 实况图（Live Photo）保存去水印（Issue #3 承诺项），已真机验证。默认关闭：开启后会切换实况保存链路。
 
-### 新增（实验）
+### 新增
 
-- EN-03「实况图去水印」，默认关闭，仅在设置页手动开启后生效：
-  - 挂载点 1：`zm7.j#c(pr7.l, dg7.h, Z)`（9.52.0 实况保存入口）before 时把 `dg7.h` 的
-    `e`/`h`（disableWaterMark / disableAiWaterMark）反射置 true，静态帧复用 EN-01 同一条
-    Canvas 跳绘路径（`jn6.i` → `jn6.j#a`）；
-  - 挂载点 2：`p32.h#a(I)Z`（ConfigCenter `android_feature_close_switch_by_code`）仅对
-    code=1（dexsql 反汇编确认 `zm7.j#c` 内 `const 1` 传入的实况保存链路开关）返回 false，
-    强制实况视频走旧链路 `g42.e#d(url, Z)` 直接下载 `dg7.h.g`（livePhotoVideoPath，与预览
-    播放同源，是唯一可能无客户端水印的来源）；其余 code 一律 proceed 原值。
-  - 选 `p32.h#a(1)` 而不是 hook 新链路响应类 `zp8.a#d()` 换 URL：后者与 `dg7.h` 无引用
-    关系，需要跨 hook 传递状态，时序脆弱；前者是链路分叉的唯一判定点，无状态。
-    代价是 code=1 的其他读点（如有）也会读到 false，风险接受为实验项。
-- 新链路 `POST /api/sns/v1/note/live_photo/save` 的视频为服务端渲染、可能带烧录水印；
-  本功能的核心假设是"旧链路视频 + 静态帧跳绘 = 无水印实况"，**该假设未在真机验证**。
+- EN-03「实况图去水印」，默认关闭，需在设置页手动开启：
+  - `p32.h#a(1) → false`（ConfigCenter `android_feature_close_switch_by_code`，dexsql
+    反汇编确认 `zm7.j#c` 内 `const 1` 传入）：实况视频强制走旧链路 `g42.e#d(url, Z)`，
+    直接下载与笔记详情预览同源的 `dg7.h.g`（livePhotoVideoPath），不再请求
+    `POST /api/sns/v1/note/live_photo/save` 服务端渲染视频（可能带烧录水印）；
+  - `dg7.h`（FeedbackDownloadImage）的 `e`/`h`（disableWaterMark / disableAiWaterMark）
+    在 `zm7.j#c` before 反射置 true：静态帧复用 EN-01 的 Canvas 跳绘路径
+    （`jn6.i` → `jn6.j#a`），同时绕过 `jn6.i` 的 fail(-4) 守卫；
+  - 挂载点选择 `p32.h#a` 而不是 hook 新链路响应类 `zp8.a#d()` 换 URL：后者与 `dg7.h`
+    无引用关系、需跨 hook 传状态、时序脆弱；前者是链路分叉的唯一判定点，无状态。
+    其余 code 一律 proceed 原值，不影响其他功能的关闭开关判断。
+- `tools/check-mounts.sh` MOUNTS 清单 58 → 62 项：新增 `zm7.j#c`(3 参)、`p32.h#a`(1 参)
+  两个功能挂载点，补 `dg7.h#<init>`(8 参，锁定 e/f/g/h 字段形状) 与 `g42.e#d`(2 参)
+  两个链路形状锚点；对小红书 9.52.0 体检 62/62 OK，GONE/SIG=0。
+- 新增 `LivePhotoWatermarkHooksTest`（8 项）；`FeatureTest` 同步 24 → 25、
+  `ReportProtocolTest` 键数 72 → 75。
 
-### 适配与工程
+### 验证
 
-- `tools/check-mounts.sh` MOUNTS 清单 58 → 62 项：新增 `zm7.j#c`(3 参)、`dg7.h#<init>`
-  (8 参，锁定 e/f/g/h 字段形状)、`p32.h#a`(1 参)、`g42.e#d`(2 参)。
-- 新增 `LivePhotoWatermarkHooksTest`（8 项）；`FeatureTest` 同步 24 → 25 项。
+- `testDebugUnitTest` 116 项全部通过（0 失败 / 0 跳过）；`lintDebug` 0 errors /
+  23 warnings（均为既有 warning）；`tools/verify-apk.sh` 17 项全部通过。
+- 真机 25102RKBEC / 小红书 9.52.0：同一条实况笔记开/关对比——EN-03 开 → 3/3 段内嵌
+  视频无水印，关 → 3/3 段有「小红书」logo + 小红书号水印；静态帧两组均无水印
+  （EN-01 覆盖）；批量保存 11 张 JPG 全部含 MotionPhoto 元数据；无崩溃、无 -4 失败、
+  无 FATAL/ANR；日志证实 `p32.h#a(1)→false` 与 `dg7.h.e/h set=2` 均命中，
+  `zm7.j#c` 在 9.52.0 实况保存路径真实执行。
 
-### 已知风险
+### 已知限制
 
-- `p32.h#a(1)` 强制 false 会影响该 code 的所有读点（若有其他读点未知，无全量 xref 手段）；
-  实况视频旧链路依赖笔记数据带 `livePhotoVideoPath`，服务端不下发时实况部分保存行为未知。
-- 真机需要观察：保存实况图后相册播放是否还有水印；静态图（EN-01）与普通视频保存是否回归。
+- 开启后实况保存走预览同源视频：宿主后续若改保存链路（如下线 livePhotoVideoPath），
+  本功能可能失效或回退到带水印的新链路。
+- `p32.h#a(1)` 强制 false 会作用于该 code 的所有读点（当前无全量 xref 手段），
+  真机验证未观察到其他功能受影响。
+
+APK: quietbox-0.9.1.apk
+versionCode: 15
+大小: 2,909,422 字节
+SHA-256: 2978745940c78097e8ad273f0f50a7d518613d1b443474bb79b9a84aefe4a9c6
 
 ## 0.9.0 - 2026-10-29
 

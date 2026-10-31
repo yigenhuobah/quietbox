@@ -12,7 +12,13 @@ import java.util.List;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * EN-03 实况图去水印（实验性，默认关闭，未真机验证）。
+ * EN-03 实况图去水印（默认关闭：开启后会切换实况保存链路）。
+ *
+ * <p>9.52.0 真机验证通过（25102RKBEC）：同一条实况笔记开/关对比，EN-03 开 →
+ * 3/3 段内嵌视频无水印，关 → 3/3 段有「小红书」logo + 小红书号水印；静态帧
+ * 两组均无水印（EN-01 覆盖）；批量保存 11 张 JPG 全部含 MotionPhoto 元数据，
+ * 无崩溃、无 -4 失败。日志证实 {@code p32.h#a(1)→false} 与 {@code dg7.h.e/h set=2}
+ * 均命中，{@code zm7.j#c} 在 9.52.0 实况保存路径真实执行。
  *
  * <p>9.52.0 实况保存入口（dexsql 反汇编 Lzm7/j;->c(Lpr7/l;Ldg7/h;Z)V，classes8.dex）：
  * <pre>
@@ -43,7 +49,8 @@ import io.github.libxposed.api.XposedModule;
  * 无任何引用关系，换 URL 需要跨 hook 传递状态（zm7.j#c 时暂存 g、zp8.a#d 时取用），
  * 时序脆弱；p32.h#a(1) 是链路分叉的唯一判定点，在判定处改写无状态且同时让
  * live_photo/save 请求不再发出。代价是 code=1 的其他读点（如有）也会读到 false——
- * 该 code 在 zm7.j#c 中的语义就是实况保存链路开关，风险接受为实验项，真机回归时观察。
+ * 该 code 在 zm7.j#c 中的语义就是实况保存链路开关，真机验证未观察到其他影响；
+ * 宿主后续若改保存链路（如下线 livePhotoVideoPath），本功能可能失效。
  *
  * <p>签名字段语义（9.52.0 dexsql 复核）：dg7.h 为 8 参构造
  * {@code <init>(String,String,String,String,Z,String,String,Z)}，字段 a~d=String、
