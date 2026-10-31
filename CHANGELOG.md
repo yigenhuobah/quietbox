@@ -1,5 +1,37 @@
 # 更新日志
 
+## 0.9.1 - 未发布（实验）
+
+新增实验性功能：实况图（Live Photo）保存去水印（EN-03）。**本项为 Issue #3 承诺的可行性验证版本，未做真机验证，不要据此宣称已支持。**
+
+### 新增（实验）
+
+- EN-03「实况图去水印」，默认关闭，仅在设置页手动开启后生效：
+  - 挂载点 1：`zm7.j#c(pr7.l, dg7.h, Z)`（9.52.0 实况保存入口）before 时把 `dg7.h` 的
+    `e`/`h`（disableWaterMark / disableAiWaterMark）反射置 true，静态帧复用 EN-01 同一条
+    Canvas 跳绘路径（`jn6.i` → `jn6.j#a`）；
+  - 挂载点 2：`p32.h#a(I)Z`（ConfigCenter `android_feature_close_switch_by_code`）仅对
+    code=1（dexsql 反汇编确认 `zm7.j#c` 内 `const 1` 传入的实况保存链路开关）返回 false，
+    强制实况视频走旧链路 `g42.e#d(url, Z)` 直接下载 `dg7.h.g`（livePhotoVideoPath，与预览
+    播放同源，是唯一可能无客户端水印的来源）；其余 code 一律 proceed 原值。
+  - 选 `p32.h#a(1)` 而不是 hook 新链路响应类 `zp8.a#d()` 换 URL：后者与 `dg7.h` 无引用
+    关系，需要跨 hook 传递状态，时序脆弱；前者是链路分叉的唯一判定点，无状态。
+    代价是 code=1 的其他读点（如有）也会读到 false，风险接受为实验项。
+- 新链路 `POST /api/sns/v1/note/live_photo/save` 的视频为服务端渲染、可能带烧录水印；
+  本功能的核心假设是"旧链路视频 + 静态帧跳绘 = 无水印实况"，**该假设未在真机验证**。
+
+### 适配与工程
+
+- `tools/check-mounts.sh` MOUNTS 清单 58 → 62 项：新增 `zm7.j#c`(3 参)、`dg7.h#<init>`
+  (8 参，锁定 e/f/g/h 字段形状)、`p32.h#a`(1 参)、`g42.e#d`(2 参)。
+- 新增 `LivePhotoWatermarkHooksTest`（8 项）；`FeatureTest` 同步 24 → 25 项。
+
+### 已知风险
+
+- `p32.h#a(1)` 强制 false 会影响该 code 的所有读点（若有其他读点未知，无全量 xref 手段）；
+  实况视频旧链路依赖笔记数据带 `livePhotoVideoPath`，服务端不下发时实况部分保存行为未知。
+- 真机需要观察：保存实况图后相册播放是否还有水印；静态图（EN-01）与普通视频保存是否回归。
+
 ## 0.9.0 - 2026-10-29
 
 适配小红书 9.52.0（9520807）。**master 只支持 9.52.0，不再支持 9.51.0**：旧版本仍会 fail-open 运行并提示「未适配」，但挂载点未按旧版维护，大部分功能可能失效。

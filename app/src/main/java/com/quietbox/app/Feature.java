@@ -101,6 +101,10 @@ public enum Feature {
             R.string.f_p0_6_video_default_mute_summary,
             false, Group.EN,
             "需求取消：小红书自带自动静音"),
+    LIVE_PHOTO_WATERMARK("EN-03", "en_3_live_photo_watermark",
+            R.string.f_en_3_live_photo_watermark_title,
+            R.string.f_en_3_live_photo_watermark_summary,
+            false, Group.EN, null),
 
     NOTE_UNAVAILABLE_VIEW("EX-01", "p1_15_note_unavailable_view",
             R.string.f_p1_15_note_unavailable_view_title,

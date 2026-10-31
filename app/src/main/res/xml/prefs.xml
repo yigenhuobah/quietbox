@@ -114,6 +114,10 @@
             android:icon="@drawable/ic_group_en"
             android:key="p1_11_watermark_policy" />
 
+        <com.quietbox.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_en"
+            android:key="en_3_live_photo_watermark" />
+
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/group_ex">

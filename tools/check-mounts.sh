@@ -344,6 +344,10 @@ Lcom/xingin/android/redutils/q;|a|P1-9 复制链接收口|verify_p1_9|3
 Ljn6/j;|a|P1-11 水印主挂|verify_watermark|6
 Ljn6/i;|i|P1-11 水印入口|verify_watermark|11
 Lcom/xingin/entities/MediaSaveConfig;|c|P1-11 语义 getter|verify_watermark|0
+Lzm7/j;|c|EN-03 实况保存入口|live_photo|3
+Ldg7/h;|<init>|EN-03 下载参数形状(8参e/f/g/h)|live_photo|8
+Lp32/h;|a|EN-03 保存链路开关(code=1)|live_photo|1
+Lg42/e;|d|EN-03 旧链路视频下载|live_photo|2
 Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateHelper;|isAutoPlayOpen|P1-12 自动播放|specs|0
 Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateHelper;|isAutoPlayOpenServer|P1-12 自动播放|specs|0
 Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateTabHelper;|isAutoPlayOpen|P1-12 自动播放|specs|0

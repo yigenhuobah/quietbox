@@ -28,7 +28,7 @@ public class ReportProtocolTest {
     }
 
     @Test
-    public void validKeyAcceptsAll72GeneratedKeys() {
+    public void validKeyAcceptsAll75GeneratedKeys() {
         int count = 0;
         for (Feature f : Feature.values()) {
             assertTrue(ReportProtocol.validKey(ReportProtocol.PREFIX_REG + f.key));
@@ -36,7 +36,7 @@ public class ReportProtocolTest {
             assertTrue(ReportProtocol.validKey(ReportProtocol.PREFIX_SKIP + f.key));
             count += 3;
         }
-        assertEquals(72, count);
+        assertEquals(75, count);
     }
 
     @Test
