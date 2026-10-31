@@ -42,6 +42,8 @@ import io.github.libxposed.api.XposedModule;
  *
  * 强制值来自模块 App：remote prefs 作为启动兜底，运行中每 3 秒通过
  * AbReportProvider 拉取本地副本（remote prefs 在宿主里是启动快照，不会热更新）。
+ * 启动兜底只在还没成功拉取过 provider 时生效；拉取过之后 provider 失败期间保持
+ * 上一次状态，不能用启动快照把运行中改过的强开项回退。
  * 面板总开关关闭时覆盖表清空。
  * 探测到的 key/value 通过模块 App 的 ContentProvider 回传，供「其他」区展示。
  */
@@ -133,24 +135,27 @@ public final class AbTestHooks {
     }
 
     /**
-     * 按声明的 valueType 产出原语值；运行期 original 的类型只作兜底校验。
+     * 按声明的 valueType 产出原语值；运行期 original 的类型用来校验改写是否安全。
      *
      * 三种失效形态都要防住：
      * - original 是 null（key 尚未下发）：按声明类型直接给值，不能静默丢弃；
-     * - original 类型与声明不符：以声明为准，避免 Boolean 收到 "1" 反向变 false；
+     * - original 与声明不是同一类：原样返回并告警。第 2 个 Type 参数不参与校验，
+     *   返回值由调用方按自己的 Type checkcast（如 {@code ((Number) f(...)).intValue()}），
+     *   这里硬给声明类型会在宿主进程抛 ClassCastException；
      * - 声明值解析不出来：返回 original 并告警，绝不猜。
+     *
+     * 包级可见：由 AbTestHooksTest 固定类型兜底行为。
      */
-    private static Object coerce(AbTest test, Object original) {
+    static Object coerce(AbTest test, Object original) {
         Object target = test.targetPrimitive();
         if (target == null) {
             Log.w(TAG, "EX-02 coerce fallback: " + test.key + " forceValue="
                     + test.forceValue + " 无法解析为 " + test.valueType);
             return original;
         }
-        if (original != null && !(original instanceof Boolean)
-                && !(original instanceof Number) && !(original instanceof String)) {
+        if (original != null && target.getClass() != original.getClass()) {
             Log.w(TAG, "EX-02 coerce fallback: " + test.key + " 运行期类型 "
-                    + original.getClass().getName() + " 不在支持范围");
+                    + original.getClass().getName() + " 与声明 " + test.valueType + " 不符");
             return original;
         }
         return target;
@@ -183,6 +188,7 @@ public final class AbTestHooks {
         private static final Map<String, String> sObserved = new ConcurrentHashMap<>();
         private static final Map<String, String> sSentValues = new ConcurrentHashMap<>();
         private static final Set<String> sLogged = ConcurrentHashMap.newKeySet();
+        private static final Set<String> sSkipped = ConcurrentHashMap.newKeySet();
         private static final int MAX_KEYS = 800;
         private static final int MAX_BATCH = 200;
 
@@ -200,6 +206,8 @@ public final class AbTestHooks {
         private static volatile SharedPreferences sPrefs;
         private static volatile String sLastRaw = "";
         private static volatile int sPullErrors;
+        /** provider 是否成功拉取过：成功过之后它就是运行期的权威值，失败期间必须保持上一次状态。 */
+        private static volatile boolean sProviderPulled;
 
         private AbRuntime() {
         }
@@ -246,23 +254,41 @@ public final class AbTestHooks {
                 // 用户从「其他」列表手填的未收录 key：按值的字面形状推断类型。
                 test = guessType(key, value);
             }
-            if (test != null && sLogged.add(key)) {
+            if (test == null) {
+                // 推断不出读点类型就不强开：硬塞一个类型会让调用方 checkcast 崩或静默失效。
+                if (sSkipped.add(key)) {
+                    Log.w(TAG, "EX-02 override ignored " + key + "=" + value
+                            + "：无法推断读点类型");
+                }
+                return null;
+            }
+            if (sLogged.add(key)) {
                 Log.i(TAG, "EX-02 override " + key + "=" + value
                         + " type=" + test.valueType);
             }
             return test;
         }
 
-        /** 未收录 key 的类型推断："1"/"0"/纯数字按组号，"true"/"false"按布尔。 */
-        private static AbTest guessType(String key, String value) {
-            AbTest.ValueType type;
+        /**
+         * 未收录 key 的类型推断：纯数字按组号（INT），"true"/"false" 按布尔（BOOL）。
+         * 其他字面量（字符串、JSON 等）判断不出口径，返回 null 由调用方跳过强开；
+         * 一律当 BOOL 会把字符串/JSON 读点塞成 Boolean。
+         *
+         * 包级可见：由 AbTestHooksTest 固定这套推断规则。
+         */
+        static AbTest guessType(String key, String value) {
+            if (value == null) {
+                return null;
+            }
+            if ("true".equalsIgnoreCase(value) || "false".equalsIgnoreCase(value)) {
+                return AbTest.forKey(key, value, AbTest.ValueType.BOOL);
+            }
             try {
                 Integer.valueOf(value);
-                type = AbTest.ValueType.INT;
             } catch (NumberFormatException e) {
-                type = AbTest.ValueType.BOOL;
+                return null;
             }
-            return AbTest.forKey(key, value, type);
+            return AbTest.forKey(key, value, AbTest.ValueType.INT);
         }
         static void observe(String key, Object value) {
             if (!sEnabled || key == null || value == null || key.length() > 128) {
@@ -311,6 +337,7 @@ public final class AbTestHooks {
                     Bundle b = callProvider(context, "overrides", null);
                     if (b != null) {
                         sPullErrors = 0;
+                        sProviderPulled = true;
                         boolean enabled = b.getBoolean(AbReportProvider.KEY_PANEL_ENABLED, false);
                         String raw = b.getString(AbReportProvider.KEY_OVERRIDES, "");
                         if (!raw.equals(sLastRaw)) {
@@ -327,8 +354,12 @@ public final class AbTestHooks {
                     if (sPullErrors++ < 3) {
                         Log.w(TAG, "EX-02 provider pull failed", t);
                     }
-                    // 落到下面的启动快照。
                 }
+            }
+            // provider 失败（模块 App 被系统杀掉、2 秒超时、调用被拒）：成功拉取过就不能
+            // 回落到启动快照，否则会把运行中改过的强开项整体覆盖、开关被静默翻转。
+            if (!mayUseStartupSnapshot(sProviderPulled)) {
+                return;
             }
             SharedPreferences sp = sPrefs;
             if (sp == null) {
@@ -342,6 +373,17 @@ public final class AbTestHooks {
             } catch (Throwable ignored) {
                 // 读取失败时保持上一次状态，不打断宿主。
             }
+        }
+
+        /**
+         * provider 这条活通道失败时，能否用启动快照兜底。
+         * 只有本进程还没成功拉取过才允许：成功过说明活通道可用，此时回落到启动
+         * 快照会把运行中改过的强开项整体回退，与「读取失败保持上一次状态」自相矛盾。
+         *
+         * 包级可见：由 AbTestHooksTest 固定这条判定。
+         */
+        static boolean mayUseStartupSnapshot(boolean providerPulled) {
+            return !providerPulled;
         }
 
         private static void apply(boolean enabled, Map<String, String> next) {

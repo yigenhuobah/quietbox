@@ -63,17 +63,19 @@ final class WatermarkHooks {
     static void install(XposedModule module, ClassLoader cl) {
         Feature f = Feature.WATERMARK_POLICY;
         int installed = 0;
+        // 主水印链路（jn6.j#a / jn6.i#i）的挂载数；纯语义 getter 不计入，
+        // 避免 getter 挂上后把主链路全失效掩盖成"已安装"。
+        int mainInstalled = 0;
 
         // 1) 主路径：Canvas 合成时把 disableWaterMark / disableAiWaterMark 置 true。
         try {
-            Class<?> cls = Class.forName(COMPOSE_CLAZZ, false, cl);
-            Method m = HookKit.findMethodQuiet(cls, "a",
-                    Bitmap.class, Bitmap.class, Bitmap.class, Bitmap.class,
-                    boolean.class, boolean.class);
-            if (m == null) {
-                HookKit.warn(module, f.id + " skip: jn6.j#a not found");
-            } else {
-                HookKit.install(module, f, "jn6.j#a(disableWaterMark=true)", m,
+            // 关键类：jn6.j 缺失即主水印链路失效，记 critical 进失败横幅。
+            Class<?> cls = HookKit.findClass(module, f, cl, COMPOSE_CLAZZ, true);
+            if (cls != null) {
+                Method m = HookKit.findMethodQuiet(module, f, cls, "a",
+                        Bitmap.class, Bitmap.class, Bitmap.class, Bitmap.class,
+                        boolean.class, boolean.class);
+                if (m != null && HookKit.install(module, f, "jn6.j#a(disableWaterMark=true)", m,
                         chain -> {
                             Object[] replaced = null;
                             try {
@@ -91,26 +93,29 @@ final class WatermarkHooks {
                             }
                             // proceed 放在 try 外：原方法自己抛异常时不能再调一次。
                             return replaced == null ? chain.proceed() : chain.proceed(replaced);
-                        });
-                installed++;
+                        })) {
+                    installed++;
+                    mainInstalled++;
+                }
             }
         } catch (Throwable t) {
             HookKit.warn(module, f.id + " skip: class jn6.j " + t);
         }
 
         // 2) 入口侧：jn6.i.i（9.51.0 为 ce8.i.i）的 disableWaterMark / disableAiWaterMark 置 true。
-        installed += hookSaveEntry(module, f, cl);
+        int saveEntry = hookSaveEntry(module, f, cl);
+        installed += saveEntry;
+        mainInstalled += saveEntry;
 
-        // 3) 语义 getter：让上层查询也认为"无水印"。
+        // 3) 语义 getter：让上层查询也认为"无水印"。可选锚点：缺失只记 skip，不标 critical。
         try {
-            Class<?> cls = Class.forName(MODEL_CLAZZ, false, cl);
-            Method m = HookKit.findMethodQuiet(cls, "c");
-            if (m == null) {
-                HookKit.warn(module, f.id + " skip: MediaSaveConfig#c not found");
-            } else {
-                HookKit.install(module, f, "MediaSaveConfig#c(no-watermark)", m,
-                        HookKit.constBool(module, f, "MediaSaveConfig#c", true));
-                installed++;
+            Class<?> cls = HookKit.findClass(module, f, cl, MODEL_CLAZZ, false);
+            if (cls != null) {
+                Method m = HookKit.findMethodQuiet(module, f, cls, "c");
+                if (m != null && HookKit.install(module, f, "MediaSaveConfig#c(no-watermark)", m,
+                        HookKit.constBool(module, f, "MediaSaveConfig#c", true))) {
+                    installed++;
+                }
             }
         } catch (Throwable t) {
             HookKit.warn(module, f.id + " skip: class MediaSaveConfig " + t);
@@ -118,6 +123,8 @@ final class WatermarkHooks {
 
         if (installed == 0) {
             HookState.markNotFound(f, "水印挂载点未找到");
+        } else if (mainInstalled == 0) {
+            HookState.markNotFound(f, "水印主链挂载点未找到（仅语义 getter 生效）");
         }
     }
 
@@ -166,14 +173,17 @@ final class WatermarkHooks {
      */
     private static int hookSaveEntry(XposedModule module, Feature f, ClassLoader cl) {
         try {
-            Class<?> cls = Class.forName(SAVE_CLAZZ, false, cl);
-            Method m = HookKit.findByShape(cls, "i", mainActivityClass(cl), String.class,
-                    String.class, String.class, String.class);
-            if (m == null) {
-                HookKit.warn(module, f.id + " skip: jn6.i#i not found");
+            // 关键类：jn6.i 是保存入口，缺失即入口侧失效，记 critical 进失败横幅。
+            Class<?> cls = HookKit.findClass(module, f, cl, SAVE_CLAZZ, true);
+            if (cls == null) {
                 return 0;
             }
-            HookKit.install(module, f, "jn6.i#i(disableWaterMark=true)", m,
+            Method m = HookKit.findByShape(module, f, cls, "i", mainActivityClass(cl), String.class,
+                    String.class, String.class, String.class);
+            if (m == null) {
+                return 0;
+            }
+            return HookKit.install(module, f, "jn6.i#i(disableWaterMark=true)", m,
                     chain -> {
                         Object[] replaced = null;
                         try {
@@ -184,8 +194,7 @@ final class WatermarkHooks {
                             HookKit.error(module, f.id + " intercept error jn6.i#i", t);
                         }
                         return replaced == null ? chain.proceed() : chain.proceed(replaced);
-                    });
-            return 1;
+                    }) ? 1 : 0;
         } catch (Throwable t) {
             HookKit.warn(module, f.id + " skip: class jn6.i " + t);
             return 0;

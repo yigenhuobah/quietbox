@@ -33,8 +33,10 @@ import io.github.libxposed.api.XposedModule;
  * Lcom/xingin/xywebview/util/XYWebViewUtil;.b，9.50.0 为 Lp0e/i0.b，9.51.0 为 Lk1e/i0.b）。
  * gotoExtApp 仍是广告专用 SPI 的动作方法，跳过原方法体即阻断 Path A。
  * Path B 走 XYUriUtils，gotoExtApp 拦不到，故补挂汇聚点 XYWebViewUtil.b：
- *   仅在 ctx 是 ExternalWebViewActivityV2 且 scheme 非 http(s) 时返回 false（未处理），
- *   让落地页留在 WebView 内，不拉起外部 App；普通 http(s) 导航不受影响。
+ *   仅在「ctx 是 ExternalWebViewActivityV2 且第 3 参 AdRedirectInfo 非空（广告落地页，
+ *   普通外链 H5 宿主把它置 null，见 ExternalWebViewActivityV2.Qe()）且 scheme 非 http(s)」
+ *   时返回 false（未处理），让广告落地页留在 WebView 内，不拉起外部 App；
+ *   tel:/mailto:/weixin:// 等普通外链 H5 外跳与 http(s) 导航原样放行。
  */
 final class ExtAppHooks {
 
@@ -60,11 +62,19 @@ final class ExtAppHooks {
             if (util != null) {
                 // b(Uri, Context, AdRedirectInfo, boolean, boolean)：后三参是混淆/实体类型，
                 // 用前导参数 (Uri, Context) 定位。9.52.0 该方法为 static。
-                Method b = HookKit.findByShape(util, "b", Uri.class, Context.class);
-                HookKit.install(module, f, "XYWebViewUtil#b", b, convergeHook(module, f));
+                // AD-04 只拦广告落地页：第 3 参必须是 AdRedirectInfo。形状不符宁可放弃
+                // 这个汇聚点（Path A 的 gotoExtApp 仍生效），也不退回「无广告信息也全拦」。
+                Method b = HookKit.findByShape(module, f, util, "b", Uri.class, Context.class);
+                if (b != null && hasAdRedirectInfoParam(b)) {
+                    HookKit.install(module, f, "XYWebViewUtil#b", b, convergeHook(module, f));
+                } else if (b != null) {
+                    HookKit.warn(module, f.id
+                            + " skip: XYWebViewUtil#b 第 3 参非 AdRedirectInfo，汇聚点不安装");
+                    HookState.note(f, "XYWebViewUtil#b 形状不符，未安装");
+                }
             }
 
-            HookState.note(f, "gotoExtApp（Path A）+ 落地页外跳汇聚点 XYWebViewUtil#b（Path B，限 ExternalWebViewActivityV2 非 http(s)）");
+            HookState.note(f, "gotoExtApp（Path A）+ 落地页外跳汇聚点 XYWebViewUtil#b（Path B，限广告落地页 ExternalWebViewActivityV2 非 http(s)）");
         } catch (Throwable t) {
             HookKit.error(module, f.id + " install aborted", t);
             HookState.note(f, "安装异常");
@@ -77,8 +87,8 @@ final class ExtAppHooks {
                 Object uri = chain.getArg(0);
                 Object ctx = chain.getArg(1);
                 if (uri instanceof Uri && ctx != null
-                        && isExternalWebView(ctx.getClass())
-                        && isAppScheme(((Uri) uri).getScheme())) {
+                        && shouldBlock(ctx.getClass(),
+                                ((Uri) uri).getScheme(), chain.getArg(2))) {
                     HookKit.hit(module, f, "XYWebViewUtil#b blocked scheme=" + ((Uri) uri).getScheme());
                     return Boolean.FALSE;
                 }
@@ -87,6 +97,27 @@ final class ExtAppHooks {
             }
             return chain.proceed();
         };
+    }
+
+    /**
+     * AD-04 拦截判定：必须同时满足
+     * 1) 第 3 参 AdRedirectInfo 非空——只有广告落地页才带。宿主 zyd.i0.b 对 null 走
+     *    确认弹窗 / XYUriUtils 正常外跳（普通外链 H5 的 tel:/mailto:/weixin:// 等），
+     *    只有 adRedirectInfo != null 才走 gotoExtApp 广告外跳，故以此区分广告页与普通外链页；
+     * 2) 宿主是 ExternalWebViewActivityV2；
+     * 3) scheme 不在白名单（要拉起外部 App 的三方 scheme）。
+     */
+    static boolean shouldBlock(Class<?> ctxClass, String scheme, Object adRedirectInfo) {
+        return adRedirectInfo != null
+                && isExternalWebView(ctxClass)
+                && isAppScheme(scheme);
+    }
+
+    /** 汇聚点第 3 参必须是 AdRedirectInfo，否则该版本的参数形状已变，不能按广告页判定。 */
+    static boolean hasAdRedirectInfoParam(Method b) {
+        Class<?>[] params = b.getParameterTypes();
+        return params.length > 2
+                && params[2].getName().endsWith(".AdRedirectInfo");
     }
 
     private static boolean isExternalWebView(Class<?> cls) {

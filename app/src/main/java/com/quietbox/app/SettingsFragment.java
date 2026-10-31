@@ -63,7 +63,11 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     private long mBannerSeq;
     /** 每个 key 最近一次写入的序号：旧回调不能覆盖新状态。 */
     private final Map<String, Long> mWriteSeq = new HashMap<>();
-    /** 每个 key 最近一次确认落盘成功的值：写失败回滚用它，避免主线程再读 binder。 */
+    /**
+     * 每个 key 最近一次确认落盘成功的值：写失败回滚用它，避免主线程再读 binder。
+     * 只由 commit 成功的回调写入；refresh() 的回读值不能写进来——RemotePreferences.commit()
+     * 先改内存再走 binder，失败时内存不回滚，回读到的是没落盘的新值。
+     */
     private final Map<String, Boolean> mConfirmed = new HashMap<>();
     private long mWriteCounter;
     /** versionName 在 Fragment 生命周期内不变，只读一次 PackageManager。 */
@@ -109,8 +113,10 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     /** 把 Feature 的标题/说明/开关接到 XML 声明的偏好项上。 */
     private void bindFeatures() {
         for (Feature f : Feature.values()) {
-            if (f.blocked()) {
-                // blocked 功能保留编号与 Feature 条目，但不在设置页渲染。
+            if (f.blocked() || f == Feature.AB_TEST_PANEL) {
+                // blocked 功能保留编号与 Feature 条目，但不在设置页渲染；
+                // EX-02 由底栏“测试”tab 承载，prefs.xml 里本来就没有它的开关，
+                // 不能按“缺项”报错，否则真正的缺项会被噪音淹没。
                 continue;
             }
             Preference p = findPreference(f.key);
@@ -241,7 +247,8 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                 MaterialSwitchPreference sw = (MaterialSwitchPreference) p;
                 boolean checked = mStore.get(f.key, f.defaultEnabled);
                 sw.setCheckedValue(checked);
-                mConfirmed.put(f.key, checked);
+                // 这里的回读值不能写进 mConfirmed：写入在途或失败时 RemotePreferences
+                // 的内存已是新值，只有 commit 成功的回调才有资格确认落盘（见 onWriteResult）。
                 // 框架没绑定时写不进去，置灰避免“改了没用”；blocked 始终置灰。
                 sw.setEnabled(writable && !f.blocked());
             }
@@ -253,9 +260,10 @@ public class SettingsFragment extends PreferenceFragmentCompat {
             boolean checked = mStore.get(Config.KEY_STRIP_XSEC_TOKEN,
                     Config.DEFAULT_STRIP_XSEC_TOKEN);
             sw.setCheckedValue(checked);
-            mConfirmed.put(Config.KEY_STRIP_XSEC_TOKEN, checked);
-            sw.setEnabled(writable && mStore.get(Feature.COPY_LINK_SANITIZE.key,
-                    Feature.COPY_LINK_SANITIZE.defaultEnabled));
+            // 父子开关交给 prefs.xml 的 android:dependency：这里手动 setEnabled 只改
+            // mEnabled，父开关后来开启时只会恢复 mDependencyMet，子项会一直灰着。
+            // writable=false 的置灰由父开关传播（MaterialSwitchPreference.shouldDisableDependents
+            // 把 !isEnabled() 也算作 disableDependents）。
         }
 
         updateBanner();

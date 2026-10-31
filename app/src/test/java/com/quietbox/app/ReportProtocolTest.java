@@ -127,6 +127,10 @@ public class ReportProtocolTest {
     /**
      * 旧会话落盘的 skip 必须被本次会话的空串覆盖，否则 failedFeatureCount
      * 会一直把已恢复正常的功能算作失败，横幅无法归零。
+     *
+     * 本文件只锁协议函数（mergeText/mergeHit）本身的返回值；provider 写入路径
+     * （会话判定、新会话清库、空串落地）已下沉为 StatusProvider.applyReport，
+     * 由 StatusProviderTest 直接执行生产代码，不在此复刻。
      */
     @Test
     public void emptyTextOverwritesStaleSkipAndResetsFailure() {
@@ -139,12 +143,16 @@ public class ReportProtocolTest {
 
         assertEquals("旧状态应计入失败", 1, failedCount(store.get(regKey), store.get(skipKey), oldHit));
 
-        // 本次会话成功注册：snapshot 发送 reg=label、skip=""，provider 用最新值覆盖。
-        store.put(regKey, ReportProtocol.mergeText(store.get(regKey), "ExploreView#g0"));
-        store.put(skipKey, ReportProtocol.mergeText(store.get(skipKey), ""));
+        // 本次会话成功注册：snapshot 发送 reg=label、skip=""，provider 按合并函数落地。
+        String regAfter = ReportProtocol.mergeText(store.get(regKey), "ExploreView#g0");
+        String skipAfter = ReportProtocol.mergeText(store.get(skipKey), "");
+        assertEquals("最新 reg 必须覆盖旧值", "ExploreView#g0", regAfter);
+        assertEquals("空串必须覆盖旧会话残留的 skip，否则横幅永久误报", "", skipAfter);
         // 本次没有新 hit 回传：空值不能覆盖历史 hit。
         long hitAfter = ReportProtocol.mergeHit(oldHit, 0L);
 
+        store.put(regKey, regAfter);
+        store.put(skipKey, skipAfter);
         assertEquals("", store.get(skipKey));
         assertEquals("旧 hit 必须保留", 7L, hitAfter);
         assertEquals("横幅计数应归零", 0,
@@ -201,26 +209,82 @@ public class ReportProtocolTest {
         assertFalse(ReportProtocol.isFresh(now - ttl - 1L, now, ttl));
         assertFalse("从未回传视为不新鲜", ReportProtocol.isFresh(0L, now, ttl));
         assertFalse(ReportProtocol.isFresh(-1L, now, ttl));
-        assertTrue("时钟回拨按新鲜处理", ReportProtocol.isFresh(now + 60_000L, now, ttl));
+        assertTrue("小幅时钟回拨（5 分钟内）仍按新鲜处理",
+                ReportProtocol.isFresh(now + 60_000L, now, ttl));
     }
 
+    /** 时钟回拨/未来时间戳：updatedAt 领先超过 5 分钟视为过期，不再当新鲜。 */
     @Test
-    public void sessionComparisonRejectsStaleWrites() {
+    public void isFreshRejectsFutureTimestampsBeyondGrace() {
+        long now = 10_000_000L;
+        long ttl = ReportProtocol.DEFAULT_TTL_MS;
+        assertTrue("恰好领先 5 分钟仍在容忍范围内",
+                ReportProtocol.isFresh(now + ReportProtocol.FUTURE_GRACE_MS, now, ttl));
+        assertFalse("未来时间戳超过 5 分钟必须视为过期",
+                ReportProtocol.isFresh(now + ReportProtocol.FUTURE_GRACE_MS + 1L, now, ttl));
+        assertFalse("时钟大幅回拨后旧 updatedAt 不能一直新鲜",
+                ReportProtocol.isFresh(now + 60 * 60 * 1000L, now, ttl));
+    }
+
+    /**
+     * 会话按身份比较：字符串不同即新会话（清库后接受），相同即同进程；
+     * 不再按毫秒比大小丢弃整批——时钟回拨后新会话的回传不能被静默丢掉。
+     */
+    @Test
+    public void sessionComparisonUsesIdentityNotOrdering() {
         // 无已存会话：带 session 的首次回传算新会话；旧版无 session 不算新。
         assertTrue(ReportProtocol.isNewSession(null, "200"));
         assertTrue(ReportProtocol.isNewSession("", "200"));
         assertFalse(ReportProtocol.isNewSession(null, null));
         assertFalse(ReportProtocol.isNewSession("100", "100"));
 
-        // 旧会话迟到写入必须整批丢弃；新会话可以覆盖。
-        assertTrue(ReportProtocol.isStaleSession("200", "100"));
+        // 身份比较：不同即新会话，与数值大小无关（时钟回拨场景）。
+        assertTrue("回拨后较小的毫秒也必须算新会话", ReportProtocol.isNewSession("200", "100"));
+        assertFalse("不再因 incoming < stored 丢弃整批",
+                ReportProtocol.isStaleSession("200", "100"));
+
+        // 只有缺失会话标识（旧版回传）且已存会话存在时才整批丢弃。
         assertTrue(ReportProtocol.isStaleSession("200", null));
+        assertTrue(ReportProtocol.isStaleSession("200", ""));
         assertFalse(ReportProtocol.isStaleSession("200", "200"));
         assertFalse(ReportProtocol.isStaleSession("200", "300"));
         assertFalse(ReportProtocol.isStaleSession(null, "100"));
+        assertFalse(ReportProtocol.isStaleSession(null, null));
 
         assertTrue(ReportProtocol.isNewSession("100", "200"));
-        assertFalse(ReportProtocol.isNewSession("200", "100"));
+        assertTrue(ReportProtocol.isNewSession("200", "100"));
+    }
+
+    /** 旧格式（纯数字毫秒）会话同样按“不同即新会话”处理，模块 App 与目标进程可各自升级。 */
+    @Test
+    public void legacyNumericSessionsFollowIdentityComparison() {
+        assertTrue("旧格式不同毫秒 = 不同进程 = 新会话",
+                ReportProtocol.isNewSession("1700000000000", "1699999999999"));
+        assertFalse("旧格式相同毫秒 = 同进程，重复上报不清库",
+                ReportProtocol.isNewSession("1700000000000", "1700000000000"));
+        assertFalse("旧格式新会话不再被整批丢弃",
+                ReportProtocol.isStaleSession("1700000000000", "1699999999999"));
+        assertTrue("旧格式 → 新格式：字符串不同即新会话",
+                ReportProtocol.isNewSession("1700000000000", "s1700000000000-0a1b2c3d"));
+        assertTrue("新格式 → 旧格式：字符串不同即新会话",
+                ReportProtocol.isNewSession("s1700000000000-0a1b2c3d", "1700000000001"));
+    }
+
+    /** 时钟回拨：新会话（随机后缀）与已存 session 不同 → 按新会话接受，不再整批丢弃。 */
+    @Test
+    public void clockRollbackSessionIsAcceptedAsNewSession() {
+        String stored = "s2000000000000-0a1b2c3d";
+        String incoming = "s1000000000000-9f8e7d6c";
+        assertTrue("回拨后新会话必须被接受", ReportProtocol.isNewSession(stored, incoming));
+        assertFalse("回拨后新会话不能按旧逻辑丢弃", ReportProtocol.isStaleSession(stored, incoming));
+    }
+
+    /** 同会话重复上报：session 相同 = 同进程，不触发清库，按正常合并处理。 */
+    @Test
+    public void duplicateReportsInSameSessionAreNotNewSession() {
+        String session = "s1700000000000-0a1b2c3d";
+        assertFalse(ReportProtocol.isNewSession(session, session));
+        assertFalse(ReportProtocol.isStaleSession(session, session));
     }
 
     @Test

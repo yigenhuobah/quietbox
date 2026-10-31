@@ -86,17 +86,30 @@ public class HookStateTest {
         assertEquals(0L, HookState.hitCount(f));
     }
 
+    /**
+     * PV-02 未被本文件其他用例、ReportTest、HookDiagnosisTest 触碰：HookState 是
+     * 进程级静态状态，只有用未被污染的 Feature 做快照前后对比，统计断言才不会
+     * 恰好被其他用例的残留状态兜底。断言用精确增量而非 >=1。
+     */
     @Test
     public void snapshotAggregatesFeatureLevelState() {
-        Feature f = Feature.WATERMARK_POLICY;
-        HookState.installed(f, "alpha");
-        HookState.markNotFound(f, "missing");
+        Feature f = Feature.CONTACT_SYNC_OFF;
+        HookState.Snapshot before = HookState.snapshot();
+        assertFalse("前置：PV-02 不应已被其他用例计入 missed", before.missed.contains(f.id));
 
+        HookState.installed(f, "alpha");
+        HookState.Snapshot afterInstall = HookState.snapshot();
+        assertEquals("注册标签应把功能计入 ok（恰好 +1）", before.ok + 1, afterInstall.ok);
+        assertEquals("仅注册不影响 skip 统计", before.bad, afterInstall.bad);
+        assertEquals("首次 touch 应使 features 计数 +1", before.features + 1, afterInstall.features);
+        assertFalse("尚无 skip 时不应进入 missed", afterInstall.missed.contains(f.id));
+
+        HookState.markNotFound(f, "missing");
         HookState.Snapshot snap = HookState.snapshot();
-        assertTrue("已注册的功能应计入 ok", snap.ok >= 1);
-        assertTrue("有 skip 的功能应计入 bad", snap.bad >= 1);
-        assertTrue("miss 与 bad 都按功能去重", snap.miss == snap.bad);
-        assertTrue("快照应包含 EN-01", snap.missed.contains("EN-01"));
+        assertEquals("skip 不影响 ok 统计", before.ok + 1, snap.ok);
+        assertEquals("有 skip 的功能应计入 bad（恰好 +1）", before.bad + 1, snap.bad);
+        assertEquals("miss 应随新 skip 按功能 +1，与 bad 同步", before.miss + 1, snap.miss);
+        assertTrue("快照应包含 PV-02", snap.missed.contains("PV-02"));
         for (int i = 1; i < snap.missed.size(); i++) {
             assertTrue("missed 列表应按编号排序",
                     snap.missed.get(i - 1).compareTo(snap.missed.get(i)) <= 0);

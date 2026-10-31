@@ -32,6 +32,9 @@ public final class ReportProtocol {
     /** 超过 10 分钟没有新回传就视为过期，横幅按“未知”处理（0）。 */
     public static final long DEFAULT_TTL_MS = 10 * 60 * 1000L;
 
+    /** 未来时间戳容忍上限：updatedAt 领先 now 超过该值视为时钟回拨/异常，直接判过期。 */
+    public static final long FUTURE_GRACE_MS = 5 * 60 * 1000L;
+
     /** 24 个 Feature × 4 个前缀 + 2 个 meta 键，构建后不可变。 */
     private static final Set<String> ALLOWED_KEYS = buildAllowedKeys();
 
@@ -107,47 +110,44 @@ public final class ReportProtocol {
 
     /**
      * 回传数据是否仍新鲜。updatedAt <= 0 表示从未回传或旧版本没有时间戳；
-     * now < updatedAt（设备时钟回拨）按新鲜处理，避免误伤。
+     * updatedAt 领先 now 超过 {@link #FUTURE_GRACE_MS}（时钟回拨/未来时间戳）
+     * 视为过期，不再当新鲜；小幅偏差仍按新鲜处理，正常 TTL 逻辑保留。
      */
     public static boolean isFresh(long updatedAt, long now, long ttlMs) {
         if (updatedAt <= 0L || ttlMs <= 0L) {
+            return false;
+        }
+        if (now - updatedAt < -FUTURE_GRACE_MS) {
             return false;
         }
         return now - updatedAt <= ttlMs;
     }
 
     /**
-     * 迟到的旧会话写入：已存会话存在，而本次没有会话标识（旧版回传）
-     * 或会话启动时间更早，整批必须丢弃，不能覆盖新会话的 reg/skip。
+     * 缺失会话标识的回传（旧版目标进程不带 meta.session）：已存会话存在时整批
+     * 丢弃，不能让无身份的回传覆盖新会话的 reg/skip。
+     *
+     * 会话之间不再按毫秒比大小：两个都带 session 的批次只有“相同/不同”两种关系，
+     * 不同交给 {@link #isNewSession} 清库后接受——设备时钟回拨后新会话的毫秒值
+     * 会小于已存值，按旧逻辑整批丢弃会让诊断数据在本会话内静默失效。
      */
     public static boolean isStaleSession(String storedSession, String incomingSession) {
-        long stored = parseLong(storedSession);
-        if (stored <= 0L) {
-            return false;
+        if (incomingSession == null || incomingSession.isEmpty()) {
+            return storedSession != null && !storedSession.isEmpty();
         }
-        long incoming = parseLong(incomingSession);
-        return incoming <= 0L || incoming < stored;
+        return false;
     }
 
-    /** 新会话：本次会话启动时间更晚（或首次带 session 回传），需要先清掉旧会话数据。 */
+    /**
+     * 新会话（身份比较）：本次携带会话标识且与已存值不同，需要先清掉旧会话数据。
+     * 生成端形如 "s<millis>-<8位hex>"（进程随机后缀保证唯一，时钟回拨不影响身份）；
+     * 旧格式（纯数字毫秒）同样按“不同即新会话”处理，模块 App 与目标进程可各自升级。
+     */
     public static boolean isNewSession(String storedSession, String incomingSession) {
-        long incoming = parseLong(incomingSession);
-        if (incoming <= 0L) {
+        if (incomingSession == null || incomingSession.isEmpty()) {
             return false;
         }
-        long stored = parseLong(storedSession);
-        return stored <= 0L || incoming > stored;
-    }
-
-    private static long parseLong(String s) {
-        if (s == null || s.isEmpty()) {
-            return 0L;
-        }
-        try {
-            return Long.parseLong(s);
-        } catch (NumberFormatException e) {
-            return 0L;
-        }
+        return !incomingSession.equals(storedSession);
     }
 
     /**

@@ -131,6 +131,43 @@ public class CopyLinkHooksTest {
         assertFalse(CopyLinkHooks.isXhsHost(null));
     }
 
+    @Test
+    public void preservedMimes_keepOriginalTypes_andEnsurePlain() {
+        // 修复点：旧实现 newPlainText 把 MIME 固定为 text/plain，原 text/html 丢失，
+        // 富文本复制粘贴到富文本目标只剩纯文本。原列表必须原样保留，缺 text/plain 时补上。
+        String[] htmlOnly = CopyLinkHooks.preservedMimes(new String[]{"text/html"});
+        assertEquals(2, htmlOnly.length);
+        assertEquals("text/html", htmlOnly[0]);
+        assertEquals("text/plain", htmlOnly[1]);
+
+        // 已含 text/plain：原列表原样返回，不重复追加。
+        String[] both = {"text/html", "text/plain"};
+        assertSame(both, CopyLinkHooks.preservedMimes(both));
+
+        // 无原 MIME / 空列表（异常 clip）：退回纯 text/plain，等价旧行为。
+        String[] fallback = CopyLinkHooks.preservedMimes(null);
+        assertEquals(1, fallback.length);
+        assertEquals("text/plain", fallback[0]);
+        String[] fallbackEmpty = CopyLinkHooks.preservedMimes(new String[0]);
+        assertEquals(1, fallbackEmpty.length);
+        assertEquals("text/plain", fallbackEmpty[0]);
+    }
+
+    @Test
+    public void preserveHtml_keepsFormatting_butSwapsSanitizedUrl() {
+        String raw = "https://www.xiaohongshu.com/x?share_id=abc&foo=1";
+        String clean = "https://www.xiaohongshu.com/x?foo=1";
+        String html = "<a href=\"" + raw + "\">" + raw + "</a>";
+        // 富文本里的原始 URL 同步换成净化后的，避免富文本粘贴把追踪参数带回去。
+        assertEquals("<a href=\"" + clean + "\">" + clean + "</a>",
+                CopyLinkHooks.preserveHtml(html, raw, clean));
+        // 不含原始 URL 的 html 原样保留（丢掉格式就等于退化为纯文本）。
+        assertEquals("<b>note</b>", CopyLinkHooks.preserveHtml("<b>note</b>", raw, clean));
+        // 原 item 无 htmlText：返回 null（Item(text, null) 等价于不设置）。
+        assertNull(CopyLinkHooks.preserveHtml(null, raw, clean));
+        assertNull(CopyLinkHooks.preserveHtml("", raw, clean));
+    }
+
     /** 防止重构成私有/实例方法后测试静默失效。 */
     @Test
     public void pureHelpers_arePackagePrivateStatic() throws Exception {
@@ -138,7 +175,10 @@ public class CopyLinkHooksTest {
                 String.class, CharSequence.class, boolean.class);
         Method host = CopyLinkHooks.class.getDeclaredMethod("isXhsHost", String.class);
         Method label = CopyLinkHooks.class.getDeclaredMethod("isCopyLabel", CharSequence.class);
-        for (Method m : new Method[]{copy, host, label}) {
+        Method mimes = CopyLinkHooks.class.getDeclaredMethod("preservedMimes", String[].class);
+        Method html = CopyLinkHooks.class.getDeclaredMethod("preserveHtml",
+                CharSequence.class, String.class, String.class);
+        for (Method m : new Method[]{copy, host, label, mimes, html}) {
             int mods = m.getModifiers();
             assertTrue(m.getName() + " must be static", Modifier.isStatic(mods));
             assertTrue(m.getName() + " 应保持 package-private，供同包测试直接调用",

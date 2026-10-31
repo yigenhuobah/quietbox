@@ -224,7 +224,10 @@ public class AbTestFragment extends PreferenceFragmentCompat {
                 : mStore.get(Feature.AB_TEST_PANEL.key,
                 Feature.AB_TEST_PANEL.defaultEnabled);
         // remote 是启动时的权威值；本地副本给运行中的拉取通道用，二者保持一致。
-        if (mStore.remote()) {
+        // masterOverride 是用户刚请求、后台还没 commit 的值：不能先写本地副本，
+        // 否则 commit 失败（尤其用户已离开页面、onWriteResult 无法回滚 UI 时）
+        // 活通道会一直按未落盘的值生效。成功落盘后由 AbConfigStore 的 mirror 更新。
+        if (mayMirrorPanelEnabled(masterOverride != null, mStore.remote())) {
             mAb.syncPanelEnabled(master);
         }
         mMaster.setCheckedValue(master);
@@ -251,6 +254,19 @@ public class AbTestFragment extends PreferenceFragmentCompat {
             }
         }
         refreshOther(report);
+    }
+
+    /**
+     * 本地副本（宿主运行中 provider 的读源）只跟随已确认落盘的总开关值。
+     *
+     * masterOverride 非空 = 这次 refresh 用的是用户刚请求、后台 commit 还没返回的值，
+     * 此时同步会给活通道塞一个可能写失败的值；写入成功后由
+     * {@link AbConfigStore#setPanelEnabled(boolean, ConfigWrites.Callback)} 的 mirror 更新。
+     *
+     * 包级可见：由 AbTestFragmentTest 固定这条判定。
+     */
+    static boolean mayMirrorPanelEnabled(boolean requestedOverride, boolean remoteAvailable) {
+        return !requestedOverride && remoteAvailable;
     }
 
     /**

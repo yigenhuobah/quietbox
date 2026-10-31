@@ -66,6 +66,10 @@ public final class ServiceBridge {
             public void onServiceDied(XposedService service) {
                 if (sService.compareAndSet(service, null)) {
                     Log.w(TAG, "service died");
+                    // 断开与绑定一样是新信息，必须触发同一次重绘：设置页要立刻切回
+                    // 「正在连接」并置灰开关，否则会一直显示旧的「已激活 / remote prefs
+                    // 可用」，直到下一次 onResume 或切 tab。
+                    pendingRender.run();
                 }
             }
         });
@@ -81,7 +85,11 @@ public final class ServiceBridge {
 
     /**
      * 拿一份可读写的 remote preferences；service 未绑定或框架不支持时返回 null。
-     * 调用方据此决定回退到本地暂存。
+     *
+     * <p>返回 null 时调用方必须拒绝写入，而不是回退本地暂存：目标进程只读这份
+     * remote 存储，写本地会造成「UI 显示已保存、目标进程读到的还是旧值」。
+     * {@link ConfigStore} 的读路径回退本地仅用于兼容 0.8.x 升级前留下的旧值，
+     * 写路径（{@link ConfigStore#put}）在 remote 不可用时一律拒绝。
      */
     public static android.content.SharedPreferences remotePreferences(String group) {
         XposedService service = sService.get();

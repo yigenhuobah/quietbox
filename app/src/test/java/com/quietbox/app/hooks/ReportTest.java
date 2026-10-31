@@ -78,7 +78,8 @@ public class ReportTest {
         Map<String, String> first = Report.snapshot();
         String session = first.get(ReportProtocol.KEY_META_SESSION);
         assertNotNull("必须回传 meta.session", session);
-        assertTrue("session 必须是可比较的启动时刻", Long.parseLong(session) > 0L);
+        assertTrue("session 必须是 s<millis>-<8位hex> 格式，带进程随机后缀",
+                session.matches("s\\d+-[0-9a-f]{8}"));
         assertTrue("必须回传 meta.updated_at",
                 Long.parseLong(first.get(ReportProtocol.KEY_META_UPDATED_AT)) > 0L);
 

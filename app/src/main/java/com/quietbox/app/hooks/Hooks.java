@@ -2,7 +2,6 @@ package com.quietbox.app.hooks;
 
 import android.util.Log;
 
-import com.quietbox.app.AbReportProvider;
 import com.quietbox.app.Config;
 import com.quietbox.app.Feature;
 import com.quietbox.app.HookState;
@@ -11,7 +10,6 @@ import java.util.Collections;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.github.libxposed.api.XposedModule;
 
@@ -22,9 +20,6 @@ import io.github.libxposed.api.XposedModule;
 public final class Hooks {
 
     private static final String TAG = "QuietBox";
-
-    private static volatile boolean sMountPushed;
-    private static final AtomicBoolean sMountSending = new AtomicBoolean();
 
     /** 单个 Feature 的安装动作；module/cl/config/feature 统一由 installOne 传入。 */
     @FunctionalInterface
@@ -116,8 +111,6 @@ public final class Hooks {
         }
         if (!config.anyEnabled()) {
             module.log(Log.INFO, TAG, "all features disabled, nothing to hook");
-            // 全关时也要推一次 0/0，清掉上一次运行留下的不兼容告警。
-            pushMountReport(module, cl);
             return;
         }
         if (mainProcess) {
@@ -137,77 +130,6 @@ public final class Hooks {
             HookState.enable(f);
             installOne(module, cl, f, config);
         }
-        pushMountReport(module, cl);
-    }
-
-    /**
-     * 挂载统计推送（模块专属扩展，保留给 MountReport 排障用）。
-     * installAll 结束时按「功能去重」统计 ok/miss，挂 Application#onCreate 拿 Context 后
-     * 一次性推给模块 App；统一异常横幅改用 StatusProvider 的逐功能回传数据。
-     *
-     * 全关时也会走到这里（推 0/0 清旧告警），因此不能假设至少有一个功能开着。
-     */
-    private static void pushMountReport(XposedModule module, ClassLoader cl) {
-        try {
-            Class<?> app = Class.forName("android.app.Application", false, cl);
-            java.lang.reflect.Method onCreate =
-                    HookKit.findMethodQuiet(app, "onCreate");
-            if (onCreate == null) {
-                return;
-            }
-            module.hook(onCreate)
-                    .setId("QuietBox#mount-report")
-                    .setExceptionMode(io.github.libxposed.api.XposedInterface.ExceptionMode.PROTECTIVE)
-                    .intercept(chain -> {
-                        try {
-                            Object self = chain.getThisObject();
-                            if (self instanceof android.content.Context
-                                    && !sMountPushed
-                                    && sMountSending.compareAndSet(false, true)) {
-                                final android.content.Context ctx = (android.content.Context) self;
-                                final HookState.Snapshot snap = HookState.snapshot();
-                                new Thread(() -> {
-                                    boolean sent = sendMount(ctx, snap);
-                                    android.util.Log.i(TAG, "mount report sent=" + sent
-                                            + " ok=" + snap.ok + " miss=" + snap.miss
-                                            + " bad=" + snap.bad + " features=" + snap.features);
-                                    // 不清空 HookState：同一份状态还要供 Report 周期回传，
-                                    // 清掉会让诊断页丢失 registered/skip。
-                                    // 每进程只尝试一次：Application#onCreate 可能被多个
-                                    // Application 实例重复触发，失败重试只会刷日志，
-                                    // 进程内也没有更好的重试时机。
-                                    sMountPushed = true;
-                                    sMountSending.set(false);
-                                }, "QuietBox-mount").start();
-                            }
-                        } catch (Throwable t) {
-                            sMountSending.set(false);
-                            HookKit.warn(module, "mount report skipped: " + t);
-                        }
-                        return chain.proceed();
-                    });
-        } catch (Throwable t) {
-            HookKit.warn(module, "mount report install skipped: " + t);
-        }
-    }
-
-    private static boolean sendMount(android.content.Context ctx, HookState.Snapshot snap) {
-        try {
-            android.os.Bundle extras = new android.os.Bundle();
-            extras.putInt(AbReportProvider.KEY_MOUNT_OK, snap.ok);
-            extras.putInt(AbReportProvider.KEY_MOUNT_MISS, snap.miss);
-            extras.putInt(AbReportProvider.KEY_MOUNT_FEATURES, snap.features);
-            extras.putInt(AbReportProvider.KEY_MOUNT_BAD, snap.bad);
-            extras.putString(AbReportProvider.KEY_MOUNT_DETAIL,
-                    android.text.TextUtils.join(",", snap.missed));
-            Object result = ctx.getContentResolver().call(
-                    android.net.Uri.parse("content://" + AbReportProvider.AUTHORITY),
-                    "mount", null, extras);
-            return result != null;
-        } catch (Throwable t) {
-            Log.w(TAG, "mount report send failed: " + t);
-            return false;
-        }
     }
 
     private static void installOne(XposedModule module, ClassLoader cl, Feature f, Config config) {
@@ -224,7 +146,8 @@ public final class Hooks {
             installer.install(module, cl, config, f);
         } catch (Throwable t) {
             module.log(Log.ERROR, TAG, f.id + " install threw", t);
-            HookState.markNotFound(f, "安装异常");
+            // 安装阶段整段抛出属于主链路失效：记 critical，让失败横幅可见。
+            HookState.markNotFoundCritical(f, "安装异常");
         }
     }
 }

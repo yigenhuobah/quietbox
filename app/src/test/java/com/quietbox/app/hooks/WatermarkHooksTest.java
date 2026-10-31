@@ -57,14 +57,26 @@ public class WatermarkHooksTest {
         assertEquals(Boolean.FALSE, out[9]);
     }
 
+    /**
+     * 置位必须与输入无关：输入为 FALSE（与目标值相反）时也要被强制置 TRUE，
+     * 否则「只 clone 不置位」的退化实现不会被发现；输入已是 TRUE 时输出仍为
+     * TRUE，锁住「无条件置位」语义而非按输入合并。
+     */
     @Test
     public void elevenArgs_overwritesTrueInputs() {
         Object[] in = elevenArgs();
-        in[5] = Boolean.TRUE;
-        in[10] = Boolean.TRUE;
+        in[5] = Boolean.FALSE;
+        in[10] = Boolean.FALSE;
         Object[] out = WatermarkHooks.applyWatermarkFlags(in);
-        assertEquals(Boolean.TRUE, out[5]);
-        assertEquals(Boolean.TRUE, out[10]);
+        assertEquals("输入 FALSE 必须被强制置为 TRUE", Boolean.TRUE, out[5]);
+        assertEquals("输入 FALSE 必须被强制置为 TRUE", Boolean.TRUE, out[10]);
+
+        Object[] inTrue = elevenArgs();
+        inTrue[5] = Boolean.TRUE;
+        inTrue[10] = Boolean.TRUE;
+        Object[] outTrue = WatermarkHooks.applyWatermarkFlags(inTrue);
+        assertEquals("输入 TRUE 时输出仍为 TRUE", Boolean.TRUE, outTrue[5]);
+        assertEquals("输入 TRUE 时输出仍为 TRUE", Boolean.TRUE, outTrue[10]);
     }
 
     @Test

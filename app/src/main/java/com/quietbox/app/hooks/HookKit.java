@@ -38,16 +38,33 @@ final class HookKit {
     }
 
     /**
-     * 类级锚点缺失属于主锚点失效：记 critical，让失败横幅能反映版本不兼容。
+     * 类缺失按可选 skip 记账（默认）：兜底/可选类改名只影响诊断展示，不进失败横幅。
+     * 主锚点类用 {@link #findClass(XposedModule, Feature, ClassLoader, String, boolean)}
+     * 传 critical=true，缺失时记 critical，让失败横幅能反映版本不兼容。
      * 方法级锚点（findMethod/findByShape 等）只记可选 skip，不影响横幅。
      */
     @Nullable
     static Class<?> findClass(XposedModule module, Feature f, ClassLoader cl, String name) {
+        return findClass(module, f, cl, name, false);
+    }
+
+    /**
+     * @param critical 主锚点类传 true：缺失时记 critical，计入失败横幅；
+     *                 可选/兜底类（占位 View、备用 launcher、副挂点等）传 false，
+     *                 只记 skip 供诊断页展示，主路径仍工作时不算功能失败。
+     */
+    @Nullable
+    static Class<?> findClass(XposedModule module, Feature f, ClassLoader cl, String name,
+                              boolean critical) {
         try {
             return Class.forName(name, false, cl);
         } catch (Throwable t) {
             warn(module, f.id + " skip: class not found " + name);
-            HookState.markNotFoundCritical(f, "类未找到 " + name);
+            if (critical) {
+                HookState.markNotFoundCritical(f, "类未找到 " + name);
+            } else {
+                HookState.markNotFound(f, "类未找到 " + name);
+            }
             return null;
         }
     }

@@ -41,6 +41,11 @@ final class ConfigStore {
         return mRemote != null;
     }
 
+    /**
+     * 读开关。remote 不可用时回退读本地：0.8.x 及更早版本在框架未绑定时会把开关
+     * 写进本地（git show v0.8.1 的 put 是这么做的），这里只读不写，保留升级残留的
+     * 旧值；写路径绝不回退（见 {@link #put}），否则目标进程读不到会误报「已保存」。
+     */
     boolean get(String key, boolean def) {
         try {
             return (mRemote != null ? mRemote : mLocal).getBoolean(key, def);

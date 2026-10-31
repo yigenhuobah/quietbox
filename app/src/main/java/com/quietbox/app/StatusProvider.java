@@ -26,9 +26,11 @@ import java.util.List;
  * skip.p0_1_splash_ad_skip / crit.p0_1_splash_ad_skip，另加
  * meta.session 与 meta.updated_at 两个会话元数据键。
  *
- * 会话语义：新会话首次写入前清掉上一会话的 reg/skip/hit/crit；迟到的旧会话
- * 整批丢弃，不能覆盖新会话。超过 {@link ReportProtocol#DEFAULT_TTL_MS} 没有
- * 新回传的数据视为过期，失败计数按 0（未知）处理，避免旧会话长期误报横幅。
+ * 会话语义（身份比较）：session 字符串相同 = 同进程，正常合并；不同（含旧格式
+ * 纯数字）= 新会话，首次写入前清掉上一会话的 reg/skip/hit/crit；缺失 session 的
+ * 旧版回传在已存会话存在时整批丢弃，不能覆盖新会话。不再按毫秒比大小丢弃回传。
+ * 超过 {@link ReportProtocol#DEFAULT_TTL_MS} 没有新回传的数据视为过期，失败计数
+ * 按 0（未知）处理，避免旧会话长期误报横幅。
  */
 public final class StatusProvider extends ContentProvider {
 
@@ -72,17 +74,27 @@ public final class StatusProvider extends ContentProvider {
         if (!isAllowedCaller(context, Binder.getCallingUid())) {
             return null;
         }
-        String[] keys = extras.getStringArray("keys");
-        String[] values = extras.getStringArray("values");
+        return applyReport(context.getSharedPreferences(PREFS, 0),
+                extras.getStringArray("keys"), extras.getStringArray("values"));
+    }
+
+    /**
+     * call() 的落盘核心：数组校验、会话判定、新会话清库与逐键合并写入。
+     * 不触碰 Binder / PackageManager / Bundle，配合 FakeSharedPreferences 可在纯 JVM
+     * 单测直接执行（见 StatusProviderTest）；call() 只剩 Context / Binder 胶水。
+     * 串行由 call() 的 synchronized 保证，本方法不再加锁。
+     *
+     * @return 与 call() 相同的语义：接受时返回空 Bundle，批次非法时返回 null
+     */
+    static Bundle applyReport(SharedPreferences sp, String[] keys, String[] values) {
         if (keys == null || values == null || keys.length != values.length) {
             return null;
         }
         if (keys.length > MAX_ITEMS) {
             return null;
         }
-        SharedPreferences sp = context.getSharedPreferences(PREFS, 0);
 
-        // 先看本批携带的会话标识：迟到的旧会话整批丢弃；新会话先清掉旧数据。
+        // 先看本批携带的会话标识：无身份（旧版回传）整批丢弃；session 不同即新会话，先清掉旧数据。
         String incomingSession = null;
         for (int i = 0; i < keys.length; i++) {
             if (ReportProtocol.KEY_META_SESSION.equals(keys[i])

@@ -8,8 +8,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 纯 JVM 的 SharedPreferences 替身：只实现 ConfigStore/AbConfigStore 用到的路径。
- * 用可控的 commit 结果验证「写失败不能当成功」。
+ * 纯 JVM 的 SharedPreferences 替身：只实现 ConfigStore/AbConfigStore/StatusProvider
+ * 用到的路径。用可控的 commit 结果验证「写失败不能当成功」。
  */
 final class FakeSharedPreferences implements SharedPreferences {
 

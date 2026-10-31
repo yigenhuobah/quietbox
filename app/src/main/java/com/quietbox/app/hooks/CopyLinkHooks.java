@@ -140,13 +140,72 @@ final class CopyLinkHooks {
             return null;
         }
         HookKit.hit(module, f, "ClipboardProxyImpl removed=" + removedKeys(raw, stripToken));
-        ClipData out = ClipData.newPlainText(label, clean);
         ClipDescription src = clip.getDescription();
+        // 保留原 MIME 列表与 htmlText：newPlainText 会把 MIME 固定为 text/plain 且不设
+        // html，原条目的 text/html（富文本）粘贴到富文本目标会退化成纯文本。
+        // Item(text, htmlText) 自 API 16（minSdk 29，无需版本守卫）；htmlText 为 null
+        // 时等价于不设置。原 item 的 Intent/Uri 维持旧行为不带走。
+        ClipData out = new ClipData(new ClipDescription(label,
+                        preservedMimes(readMimeTypes(src))),
+                new ClipData.Item(clean, preserveHtml(
+                        clip.getItemAt(0).getHtmlText(), raw, clean)));
         if (src != null && src.getExtras() != null) {
             out.getDescription().setExtras(
                     new android.os.PersistableBundle(src.getExtras()));
         }
         return out;
+    }
+
+    /** ClipDescription.getMimeTypes() 是 @hide，只能按 getMimeTypeCount/getMimeType 逐个读出。 */
+    @Nullable
+    private static String[] readMimeTypes(@Nullable ClipDescription src) {
+        if (src == null) {
+            return null;
+        }
+        try {
+            int n = src.getMimeTypeCount();
+            String[] out = new String[n];
+            for (int i = 0; i < n; i++) {
+                out[i] = src.getMimeType(i);
+            }
+            return out;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /**
+     * 净化后重建 ClipData 的 MIME 列表：原样保留原列表（text/html 等不丢），缺
+     * text/plain 时补上——净化后的文本是纯文本，只认 text/plain 的粘贴目标仍要能看到。
+     * 原列表为空时退回纯 text/plain（与 newPlainText 等价）。纯函数，供 JVM 单测直接调用。
+     */
+    static String[] preservedMimes(@Nullable String[] src) {
+        if (src == null || src.length == 0) {
+            return new String[]{ClipDescription.MIMETYPE_TEXT_PLAIN};
+        }
+        for (String m : src) {
+            if (ClipDescription.MIMETYPE_TEXT_PLAIN.equals(m)) {
+                return src;
+            }
+        }
+        String[] out = new String[src.length + 1];
+        System.arraycopy(src, 0, out, 0, src.length);
+        out[src.length] = ClipDescription.MIMETYPE_TEXT_PLAIN;
+        return out;
+    }
+
+    /**
+     * 原 item 带 htmlText 时的处理：格式原样保留，但其中的原始 URL 全部替换成净化后的
+     * URL，避免富文本粘贴把追踪参数带回去（净化只落在纯文本上就等于没净化富文本面）。
+     * 原 item 无 htmlText 时返回 null（Item 构造传 null 等价于不设置）。
+     * 纯函数，供 JVM 单测直接调用。
+     */
+    @Nullable
+    static String preserveHtml(@Nullable CharSequence html, String raw, String clean) {
+        if (html == null || html.length() == 0) {
+            return null;
+        }
+        return html.toString().replace(raw, clean);
     }
 
     /** 副挂：redutils/q.a(Context, label, text)，只对 label == "ug-share-copy-link" 的复制链接生效。 */

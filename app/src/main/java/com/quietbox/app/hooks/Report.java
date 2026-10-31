@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -26,8 +27,9 @@ import java.util.concurrent.TimeUnit;
  * 目标进程 → 模块 App 的诊断回传（registered / hit N / skip / critical）。
  *
  * 方向与 AbReportProvider 相同：hook 侧只能主动 call 进模块的 ContentProvider
- * （remote prefs 在目标进程只读）。Context 用 ActivityThread 反射拿——框架类
- * 黑名单禁止 hook android.app.Application，不能像别处那样挂 onCreate 兜底。
+ * （remote prefs 在目标进程只读）。Context 用 ActivityThread 反射拿——Report.start
+ * 在 installAll 开头就执行，早于 Hooks/AbTestHooks 挂的 Application#onCreate 兜底，
+ * 不能依赖那个回调先拿到 Context。
  *
  * 只由主进程启动：子进程的 hook 注册状态不完整，回传会让诊断页误报。
  * 节流：后台单线程每 3 秒把 HookState 快照打平上报一次，内容没变不发；
@@ -39,8 +41,17 @@ final class Report {
     private static final String TAG = "QuietBox";
     private static final int MAX_VALUE = 256;
 
-    /** 本次目标进程会话标识：用启动时刻毫秒值，便于跨会话比较新旧。 */
-    private static final String SESSION = String.valueOf(System.currentTimeMillis());
+    /**
+     * 本次目标进程会话标识："s<millis>-<8位hex>"。毫秒只作参考，唯一性由进程随机
+     * 后缀保证，时钟回拨不会让新会话“变小”；接收端按身份比较（不同即新会话）。
+     */
+    private static final String SESSION = newSessionId();
+
+    /** 会话标识的生成点（每模块一处）：启动毫秒 + 随机 8 位十六进制后缀。 */
+    private static String newSessionId() {
+        return "s" + System.currentTimeMillis() + "-"
+                + UUID.randomUUID().toString().substring(0, 8);
+    }
 
     /** 内容无变化时的心跳间隔；必须明显小于 StatusProvider 的 10 分钟 TTL。 */
     private static final long HEARTBEAT_MS = 60_000L;

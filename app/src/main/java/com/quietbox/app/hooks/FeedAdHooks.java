@@ -130,7 +130,7 @@ final class FeedAdHooks {
                 if (arg instanceof List) {
                     List<?> list = (List<?>) arg;
                     seenOnce(module, f, where, list.size());
-                    int removed = dropAds(list);
+                    int removed = dropAds(module, f, where, list);
                     if (removed > 0) {
                         HookKit.hit(module, f, where + " removed=" + removed);
                     }
@@ -151,7 +151,7 @@ final class FeedAdHooks {
         HookKit.info(module, f.id + " seen " + where + " size=" + size);
     }
 
-    private static int dropAds(List<?> list) {
+    private static int dropAds(XposedModule module, Feature f, String where, List<?> list) {
         int removed = 0;
         try {
             Iterator<?> it = list.iterator();
@@ -162,8 +162,10 @@ final class FeedAdHooks {
                     removed++;
                 }
             }
-        } catch (Throwable ignored) {
-            // 不可变列表等异常：原样放行，不影响原逻辑。
+        } catch (Throwable t) {
+            // 不可变列表等异常：原样放行，不影响原逻辑；但必须记日志，否则该入口的
+            // AD-02/AD-08/09/10 永久静默失效且无任何痕迹（HookKit 约定 2：catch 后记日志）。
+            HookKit.error(module, f.id + " dropAds failed " + where, t);
         }
         return removed;
     }
