@@ -348,6 +348,8 @@ Lzm7/j;|c|EN-03 实况保存入口|live_photo|3
 Ldg7/h;|<init>|EN-03 下载参数形状(8参e/f/g/h)|live_photo|8
 Lp32/h;|a|EN-03 保存链路开关(code=1)|live_photo|1
 Lg42/e;|d|EN-03 旧链路视频下载|live_photo|2
+Lcom/xingin/entities/notedetail/FunctionSwitch;|a|EN-04 强制保存开关(enable)|en_4_force_save|0
+Lcom/xingin/entities/notedetail/FunctionSwitch;|c|EN-04 强制保存类型(type)|en_4_force_save|0
 Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateHelper;|isAutoPlayOpen|P1-12 自动播放|specs|0
 Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateHelper;|isAutoPlayOpenServer|P1-12 自动播放|specs|0
 Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateTabHelper;|isAutoPlayOpen|P1-12 自动播放|specs|0
