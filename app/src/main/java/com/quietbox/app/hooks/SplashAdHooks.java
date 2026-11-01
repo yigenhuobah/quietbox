@@ -88,7 +88,7 @@ final class SplashAdHooks {
 
     /** Path A：首页 Controller 内嵌 Fragment 开屏。 */
     private static void installEmbedded(XposedModule module, ClassLoader cl, Feature f) {
-        Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ);
+        Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ, true);
         if (cls == null) {
             return;
         }
@@ -104,7 +104,7 @@ final class SplashAdHooks {
 
     /** Path B：独立全屏开屏 Activity。 */
     private static void installFullScreen(XposedModule module, ClassLoader cl, Feature f) {
-        Class<?> cb = HookKit.findClass(module, f, cl, LIFECYCLE_CB);
+        Class<?> cb = HookKit.findClass(module, f, cl, LIFECYCLE_CB, true);
         if (cb != null) {
             // d(WeakReference, SplashAd)：Path B 唯一出口，后面的 SplashAd 是混淆包内类型，
             // 编译期拿不到 Class，用前导参数 WeakReference 定位。

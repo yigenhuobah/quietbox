@@ -23,7 +23,7 @@ final class GoodsCommentHooks {
     static void install(XposedModule module, ClassLoader cl) {
         Feature f = Feature.GOODS_COMMENT_BLOCK;
         try {
-            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ);
+            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ, true);
             HookKit.install(module, f, "startAddIn",
                     HookKit.findByNameAndArity(cls, "startAddIn", 5),
                     HookKit.skipVoid(module, f, "startAddIn"));

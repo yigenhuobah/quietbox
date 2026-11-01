@@ -24,7 +24,7 @@ final class ContentRatingHooks {
     static void install(XposedModule module, ClassLoader cl) {
         Feature f = Feature.CONTENT_RATING_BLOCK;
         try {
-            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ);
+            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ, true);
             Method should = HookKit.findMethod(module, f, cls, SHOULD_METHOD, String.class);
             HookKit.install(module, f, SHOULD_METHOD, should,
                     HookKit.constBool(module, f, SHOULD_METHOD, false));

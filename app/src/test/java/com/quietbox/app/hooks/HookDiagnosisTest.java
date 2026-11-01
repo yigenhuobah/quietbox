@@ -19,6 +19,9 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -218,6 +221,43 @@ public class HookDiagnosisTest {
         bindOuter(module, f, FakeDetectorOuter.class);
 
         assertEquals("成功挂载后同一检测器类不得重复 hook",
+                1, hookCalls.get());
+    }
+
+    @Test
+    public void screenshotBindConcurrentCallsInstallOnce() throws Exception {
+        clearBound();
+        Feature f = Feature.SCREENSHOT_DETECT_OFF;
+        AtomicInteger hookCalls = new AtomicInteger();
+        InvocationHandler inner = hookCountingHandler(hookCalls, true);
+        // 在 hook() 内人为放大窗口：若 bindOuter 退回 contains→install→add 三段写法，
+        // 并发线程会在登记 BOUND 前同时进入 install，hookCalls 变成 2+。
+        InvocationHandler delaying = (proxy, method, args) -> {
+            if ("hook".equals(method.getName())) {
+                Thread.sleep(50);
+            }
+            return inner.invoke(proxy, method, args);
+        };
+        XposedModule module = newModule(delaying);
+
+        int threads = 4;
+        CyclicBarrier barrier = new CyclicBarrier(threads);
+        CountDownLatch done = new CountDownLatch(threads);
+        for (int i = 0; i < threads; i++) {
+            new Thread(() -> {
+                try {
+                    barrier.await();
+                    bindOuter(module, f, FakeDetectorOuter.class);
+                } catch (Exception ignored) {
+                    // 单测线程：断言统一放在 latch 之后。
+                } finally {
+                    done.countDown();
+                }
+            }).start();
+        }
+        assertTrue("并发 bindOuter 应在 10 秒内全部返回", done.await(10, TimeUnit.SECONDS));
+
+        assertEquals("BOUND 占位必须原子：并发注册观察者只允许安装一次",
                 1, hookCalls.get());
     }
 }

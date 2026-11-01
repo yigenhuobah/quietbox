@@ -30,7 +30,7 @@ final class PushGuideHooks {
     static void install(XposedModule module, ClassLoader cl) {
         Feature f = Feature.PUSH_GUIDE_BLOCK;
         try {
-            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ);
+            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ, true);
             for (String name : SHOW_METHODS) {
                 Method m = HookKit.findMethod(module, f, cls, name);
                 if (m != null) {

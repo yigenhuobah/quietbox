@@ -74,7 +74,7 @@ final class FeedAdHooks {
 
     /** 开屏关联的第 2 位广告：客户端自己插的那一种。 */
     private static void installTwoPosition(XposedModule module, ClassLoader cl, Feature f) {
-        Class<?> service = HookKit.findClass(module, f, cl, SERVICE_CLAZZ);
+        Class<?> service = HookKit.findClass(module, f, cl, SERVICE_CLAZZ, true);
         if (service == null) {
             return;
         }
@@ -84,7 +84,7 @@ final class FeedAdHooks {
         Method record = HookKit.findByNameAndArity(service, RECORD_METHOD, 2);
         HookKit.install(module, f, RECORD_METHOD, record, HookKit.skipVoid(module, f, RECORD_METHOD));
 
-        Class<?> feed = HookKit.findClass(module, f, cl, FEED_LIST);
+        Class<?> feed = HookKit.findClass(module, f, cl, FEED_LIST, true);
         Method insert = HookKit.findByNameAndArity(feed, "g0", 2);
         HookKit.install(module, f, "ExploreView.g0", insert, new XposedInterface.Hooker() {
             @Override
@@ -105,7 +105,7 @@ final class FeedAdHooks {
 
     /** 普通信息流广告：服务端下发 isAd，只能在列表层过滤。 */
     private static void installListFilter(XposedModule module, ClassLoader cl, Feature f) {
-        Class<?> feed = HookKit.findClass(module, f, cl, FEED_LIST);
+        Class<?> feed = HookKit.findClass(module, f, cl, FEED_LIST, true);
         if (feed != null) {
             HookKit.install(module, f, "ExploreView.S", HookKit.findByNameAndArity(feed, "S", 1),
                     dropAdsHook(module, f, "ExploreView.S", 0));

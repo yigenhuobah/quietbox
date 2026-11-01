@@ -81,6 +81,18 @@ final class Report {
     private static volatile long sNextTry;
     private static volatile int sErrors;
 
+    /** 单条崩溃文本上限：在 MAX_VALUE=256 内留键名与通道开销余量。 */
+    private static final int MAX_CRASH_CHARS = 240;
+
+    /**
+     * 最近崩溃环（最新在前，最多 3 条）：UEH 在崩溃线程写入，snapshot 打平为
+     * crash0/crash1/crash2 键。只存进程内静态数据，目标进程重启后自然清零。
+     */
+    private static final List<String> CRASHES = new ArrayList<>(3);
+    private static final Object CRASH_LOCK = new Object();
+    /** UEH 只包一次：防 installAll 重入（模块热重载）把调用链再包一层。 */
+    private static volatile boolean sCrashHandlerInstalled;
+
     private Report() {
     }
 
@@ -100,6 +112,73 @@ final class Report {
             } catch (Throwable ignored) {
             }
         }, 2, 3, TimeUnit.SECONDS);
+    }
+
+    /**
+     * 包装 Thread.setDefaultUncaughtExceptionHandler 记录目标进程最近崩溃。
+     *
+     * 幂等（{@link #sCrashHandlerInstalled} 保证只包一次）；previous 先保存，自定义
+     * handler 内先写崩溃再透传 previous（非空时），全程 try/catch：绝不因我们抛异常、
+     * 绝不改变目标 App 原有的异常处理行为。仅主进程、在 Hooks.installAll 的
+     * config/anyEnabled 早退之后调用。
+     */
+    static synchronized void installCrashHandler() {
+        if (sCrashHandlerInstalled) {
+            return;
+        }
+        sCrashHandlerInstalled = true;
+        final Thread.UncaughtExceptionHandler previous =
+                Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler((thread, throwable) -> {
+            try {
+                recordCrash(thread, throwable);
+            } catch (Throwable ignored) {
+            }
+            if (previous != null) {
+                previous.uncaughtException(thread, throwable);
+            }
+        });
+    }
+
+    /**
+     * 记录一条崩溃：时间（epoch 毫秒）| 线程名 | 异常类名 | 栈前 2 帧，
+     * 单条截断 ≤ {@link #MAX_CRASH_CHARS}。新的顶掉最旧的；记录本身抛出的任何
+     * 异常都不得上抛（由调用方 UEH 的 try/catch 兜底），避免干扰原有处理链。
+     */
+    static void recordCrash(Thread thread, Throwable throwable) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(System.currentTimeMillis()).append('|');
+        sb.append(thread != null ? thread.getName() : "?").append('|');
+        if (throwable == null) {
+            sb.append('?');
+        } else {
+            sb.append(throwable.getClass().getName());
+            StackTraceElement[] frames = throwable.getStackTrace();
+            for (int i = 0; i < 2 && i < frames.length; i++) {
+                sb.append('|').append(frames[i]);
+            }
+        }
+        String entry = truncateCrash(sb.toString());
+        synchronized (CRASH_LOCK) {
+            CRASHES.add(0, entry);
+            while (CRASHES.size() > 3) {
+                CRASHES.remove(CRASHES.size() - 1);
+            }
+        }
+    }
+
+    /** 第 i 新的崩溃文本；不足返回空串（空串覆盖清掉模块 App 里的旧会话残留）。 */
+    private static String crashAt(int i) {
+        synchronized (CRASH_LOCK) {
+            return i < CRASHES.size() ? CRASHES.get(i) : "";
+        }
+    }
+
+    private static String truncateCrash(String s) {
+        if (s == null) {
+            return "";
+        }
+        return s.length() <= MAX_CRASH_CHARS ? s : s.substring(0, MAX_CRASH_CHARS);
     }
 
     private static void flush() {
@@ -170,13 +249,14 @@ final class Report {
 
     /**
      * HookState 快照 → 平铺的 key/value（key 用 reg./hit./skip./crit. 前缀，
-     * value 截断到 256），并附带 meta.session / meta.updated_at。
+     * value 截断到 256），并附带 meta.session / meta.updated_at 与 crash0/1/2。
      *
      * reg 与 skip 对每个 touched Feature 都必须发送，缺失时发空串：StatusProvider 用
      * 最新值覆盖旧值，只有空串才能清掉上一次目标进程会话遗留的 skip。否则旧 skip
      * 会永久留在 status_report 里，让横幅按「已启用且 skip 非空」持续误报。
      * hit 仍只在 >0 时发送，由 StatusProvider 取历史最大值，不会被空值覆盖。
      * crit 只在主锚点（类）缺失时为 "1"，方法级 skip 保持空串。
+     * crash0/1/2（0 最新）始终发送、无崩溃发空串：与 reg/skip 同一清残留机制。
      */
     static Map<String, String> snapshot() {
         Map<String, String> out = new TreeMap<>();
@@ -192,6 +272,9 @@ final class Report {
             out.put(StatusProvider.PREFIX_CRIT + f.key,
                     HookState.hasCriticalSkip(f) ? "1" : "");
         }
+        out.put(ReportProtocol.KEY_CRASH_0, truncate(crashAt(0)));
+        out.put(ReportProtocol.KEY_CRASH_1, truncate(crashAt(1)));
+        out.put(ReportProtocol.KEY_CRASH_2, truncate(crashAt(2)));
         out.put(ReportProtocol.KEY_META_SESSION, SESSION);
         out.put(ReportProtocol.KEY_META_UPDATED_AT,
                 String.valueOf(System.currentTimeMillis()));

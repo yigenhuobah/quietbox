@@ -21,7 +21,8 @@ import java.util.Arrays;
  * - 新会话必须清掉上一会话的 reg/skip/hit/crit，否则横幅按旧残留永久误报；
  * - 同会话回传的空串必须覆盖旧 skip（provider 停写空串时本测试必须变红）；
  * - hit 取历史最大值，负数/更小值不覆盖；
- * - 无 session 的旧版回传在已存会话存在时整批丢弃，在空库上则接受。
+ * - 无 session 的旧版回传按「同会话兼容」合并进当前数据：不清库、不丢弃
+ *   （与 CMT/QM 语义一致），首个带 session 的回传仍会重置旧数据。
  *
  * call() 剩余的 Binder / PackageManager 胶水（UID 校验、Context 判空、method
  * 分发）依赖 Android 框架，仍需 Robolectric/androidTest，不在本文件范围。
@@ -113,20 +114,24 @@ public class StatusProviderTest {
         assertEquals(3L, sp.getLong(v(HIT), 0L));
     }
 
-    /** 旧版回传（无 meta.session）在已存会话存在时整批丢弃。 */
+    /** 旧版回传（无 meta.session）按同会话兼容合并进当前数据，不再整批丢弃。 */
     @Test
-    public void legacyBatchWithoutSessionIsDroppedWhenSessionStored() {
+    public void legacyBatchWithoutSessionIsMergedAsSameSession() {
         FakeSharedPreferences sp = new FakeSharedPreferences();
         sp.edit().putString(v(SESSION), "s2000-bbbbbbbb").apply();
         sp.edit().putString(v(REG), "keep").putLong(v(UPDATED_AT), 1111L).apply();
 
         Bundle result = StatusProvider.applyReport(sp,
-                new String[]{REG, SKIP},
-                new String[]{"intruder", "旧版无 session 的覆盖"});
+                new String[]{REG, SKIP, UPDATED_AT},
+                new String[]{"intruder", "旧版无 session 的覆盖", "2222"});
 
-        assertNotNull("丢弃也返回 Bundle，调用方按成功处理", result);
-        assertEquals("无身份回传不能覆盖已存会话数据", "keep", sp.getString(v(REG), null));
-        assertEquals("无身份回传不能刷新 updated_at", 1111L, sp.getLong(v(UPDATED_AT), 0L));
+        assertNotNull(result);
+        assertEquals("无 session 的回传按同会话兼容合并，不能整批丢弃",
+                "intruder", sp.getString(v(REG), null));
+        assertEquals("skip 同样按最新值落地", "旧版无 session 的覆盖", sp.getString(v(SKIP), null));
+        assertEquals("updated_at 同样按最新值刷新", 2222L, sp.getLong(v(UPDATED_AT), 0L));
+        assertEquals("已存会话标识不受无 session 批次影响",
+                "s2000-bbbbbbbb", sp.getString(v(SESSION), null));
     }
 
     /** 空库上的旧版回传没有可保护的会话，正常接受。 */
@@ -183,19 +188,42 @@ public class StatusProviderTest {
         assertEquals("ExploreView#g0", sp.getString(v(REG), null));
     }
 
-    /** 非法批次与被丢弃批次都不落任何数据，落盘值仍可被同批合法键覆盖。 */
+    /** session 值非法（null）的本批视为无 session：同会话兼容合并，且不能覆盖已存会话标识。 */
     @Test
-    public void sessionValueMustBeValidTextToBeRecognized() {
+    public void nullSessionValueIsRecognizedAsSessionLessAndMergedCompatibly() {
         FakeSharedPreferences sp = new FakeSharedPreferences();
         sp.edit().putString(v(SESSION), "s2000-bbbbbbbb").apply();
 
-        // session 值为 null：isValidValue 拒绝 → 本批视为无身份回传，整批丢弃。
+        // session 值为 null：isValidValue 拒绝 → 本批视为无 session 回传（同会话兼容）。
         assertNotNull(StatusProvider.applyReport(sp,
                 new String[]{SESSION, REG},
                 new String[]{null, "intruder"}));
-        assertEquals("null session 不能让批次获得身份",
+        assertEquals("null session 不能让批次获得身份，已存会话保持不变",
                 "s2000-bbbbbbbb", sp.getString(v(SESSION), null));
-        assertFalse(sp.contains(v(REG)));
+        assertEquals("无 session 批次按同会话兼容合并，不再整批丢弃",
+                "intruder", sp.getString(v(REG), null));
+    }
+
+    /** crash 回传键走 reg/skip 的文本覆盖路径：最新值落地，空串可清掉旧崩溃。 */
+    @Test
+    public void crashKeysFollowTextMergePath() {
+        FakeSharedPreferences sp = new FakeSharedPreferences();
+        assertNotNull(StatusProvider.applyReport(sp,
+                new String[]{SESSION, ReportProtocol.KEY_CRASH_0, ReportProtocol.KEY_CRASH_1},
+                new String[]{"s4000-dddddddd",
+                        "1000|main|java.lang.NullPointerException|at a.b.C.d(C.java:1)|at e.f.G.h(G.java:2)",
+                        ""}));
+
+        assertEquals("1000|main|java.lang.NullPointerException|at a.b.C.d(C.java:1)|at e.f.G.h(G.java:2)",
+                sp.getString("v:" + ReportProtocol.KEY_CRASH_0, null));
+        assertEquals("无崩溃槽位以空串落地", "", sp.getString("v:" + ReportProtocol.KEY_CRASH_1, null));
+
+        // 下一次目标进程会话无崩溃：空串覆盖必须清掉上一会话的崩溃记录。
+        assertNotNull(StatusProvider.applyReport(sp,
+                new String[]{ReportProtocol.KEY_CRASH_0},
+                new String[]{""}));
+        assertEquals("空串必须清掉旧会话崩溃残留", "",
+                sp.getString("v:" + ReportProtocol.KEY_CRASH_0, null));
     }
 
     /** 写侧与读侧（reportString/reportHit）使用同一 "v:" 前缀契约。 */

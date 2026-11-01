@@ -52,7 +52,7 @@ final class NoteUnavailableHooks {
     static void install(XposedModule module, ClassLoader cl) {
         Feature f = Feature.NOTE_UNAVAILABLE_VIEW;
         try {
-            Class<?> lambda = HookKit.findClass(module, f, cl, LAMBDA);
+            Class<?> lambda = HookKit.findClass(module, f, cl, LAMBDA, true);
             if (lambda == null) {
                 return;
             }

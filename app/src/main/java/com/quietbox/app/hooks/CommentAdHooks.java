@@ -22,7 +22,7 @@ final class CommentAdHooks {
     static void install(XposedModule module, ClassLoader cl) {
         Feature f = Feature.COMMENT_AD_FILTER;
         try {
-            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ);
+            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ, true);
             Method m = HookKit.findMethod(module, f, cls, METHOD);
             HookKit.install(module, f, METHOD, m, HookKit.constBool(module, f, METHOD, false));
         } catch (Throwable t) {

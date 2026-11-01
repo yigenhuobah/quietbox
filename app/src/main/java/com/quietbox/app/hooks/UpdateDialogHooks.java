@@ -26,7 +26,7 @@ final class UpdateDialogHooks {
     static void install(XposedModule module, ClassLoader cl) {
         Feature f = Feature.UPDATE_DIALOG_BLOCK;
         try {
-            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ);
+            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ, true);
             Method onCreate = HookKit.findMethod(module, f, cls, "onCreate", Bundle.class);
             HookKit.install(module, f, "onCreate", onCreate, new XposedInterface.Hooker() {
                 @Override

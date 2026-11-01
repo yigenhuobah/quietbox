@@ -26,7 +26,7 @@ final class ContactSyncHooks {
     static void install(XposedModule module, ClassLoader cl) {
         Feature f = Feature.CONTACT_SYNC_OFF;
         try {
-            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ);
+            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ, true);
             HookKit.install(module, f, "start",
                     HookKit.findMethod(module, f, cls, "start", android.content.Context.class),
                     HookKit.skipVoid(module, f, "start"));

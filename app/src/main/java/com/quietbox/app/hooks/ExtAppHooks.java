@@ -54,11 +54,11 @@ final class ExtAppHooks {
     static void install(XposedModule module, ClassLoader cl) {
         Feature f = Feature.EXT_APP_BLOCK;
         try {
-            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ);
+            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ, true);
             Method m = HookKit.findMethod(module, f, cls, METHOD);
             HookKit.install(module, f, METHOD, m, HookKit.skipVoid(module, f, METHOD));
 
-            Class<?> util = HookKit.findClass(module, f, cl, CONVERGE);
+            Class<?> util = HookKit.findClass(module, f, cl, CONVERGE, true);
             if (util != null) {
                 // b(Uri, Context, AdRedirectInfo, boolean, boolean)：后三参是混淆/实体类型，
                 // 用前导参数 (Uri, Context) 定位。9.52.0 该方法为 static。

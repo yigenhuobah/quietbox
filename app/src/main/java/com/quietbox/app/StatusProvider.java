@@ -24,11 +24,13 @@ import java.util.List;
  *
  * key 形如 reg.p0_1_splash_ad_skip / hit.p0_1_splash_ad_skip /
  * skip.p0_1_splash_ad_skip / crit.p0_1_splash_ad_skip，另加
- * meta.session 与 meta.updated_at 两个会话元数据键。
+ * meta.session 与 meta.updated_at 两个会话元数据键，以及 crash0/crash1/crash2
+ * 三个最近崩溃键。
  *
- * 会话语义（身份比较）：session 字符串相同 = 同进程，正常合并；不同（含旧格式
- * 纯数字）= 新会话，首次写入前清掉上一会话的 reg/skip/hit/crit；缺失 session 的
- * 旧版回传在已存会话存在时整批丢弃，不能覆盖新会话。不再按毫秒比大小丢弃回传。
+ * 会话语义（身份比较，与 CMT/QM 一致）：session 字符串相同 = 同进程，正常合并；
+ * 不同（含旧格式纯数字）= 新会话，首次写入前清掉上一会话的 reg/skip/hit/crit；
+ * 缺失 session 的旧版回传按「同会话兼容」合并进当前数据（不丢弃、不清库），
+ * 保证模块 App 与目标进程可各自升级。不再按毫秒比大小丢弃回传。
  * 超过 {@link ReportProtocol#DEFAULT_TTL_MS} 没有新回传的数据视为过期，失败计数
  * 按 0（未知）处理，避免旧会话长期误报横幅。
  */
@@ -94,7 +96,8 @@ public final class StatusProvider extends ContentProvider {
             return null;
         }
 
-        // 先看本批携带的会话标识：无身份（旧版回传）整批丢弃；session 不同即新会话，先清掉旧数据。
+        // 先看本批携带的会话标识：session 不同即新会话，先清掉旧数据；
+        // 无 session（旧版回传）按同会话兼容合并进当前数据。
         String incomingSession = null;
         for (int i = 0; i < keys.length; i++) {
             if (ReportProtocol.KEY_META_SESSION.equals(keys[i])
@@ -104,9 +107,6 @@ public final class StatusProvider extends ContentProvider {
         }
         String storedSession = sp.getString(
                 VALUE_PREFIX + ReportProtocol.KEY_META_SESSION, null);
-        if (ReportProtocol.isStaleSession(storedSession, incomingSession)) {
-            return new Bundle();
-        }
         SharedPreferences.Editor editor = sp.edit();
         boolean newSession = ReportProtocol.isNewSession(storedSession, incomingSession);
         if (newSession) {
@@ -185,6 +185,21 @@ public final class StatusProvider extends ContentProvider {
         try {
             SharedPreferences sp = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
             return sp.getString(VALUE_PREFIX + prefix + key, null);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /** 读取最近崩溃第 index 条（0=最新，最大 2）；没有数据或读取失败返回 null。 */
+    public static String reportCrash(Context context, int index) {
+        if (context == null || index < 0 || index > 2) {
+            return null;
+        }
+        String key = index == 0 ? ReportProtocol.KEY_CRASH_0
+                : index == 1 ? ReportProtocol.KEY_CRASH_1 : ReportProtocol.KEY_CRASH_2;
+        try {
+            SharedPreferences sp = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+            return sp.getString(VALUE_PREFIX + key, null);
         } catch (Throwable t) {
             return null;
         }

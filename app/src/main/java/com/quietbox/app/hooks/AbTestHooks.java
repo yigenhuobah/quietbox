@@ -61,7 +61,7 @@ public final class AbTestHooks {
     static void install(XposedModule module, ClassLoader cl) {
         Feature f = Feature.AB_TEST_PANEL;
         try {
-            Class<?> store = HookKit.findClass(module, f, cl, AB_STORE);
+            Class<?> store = HookKit.findClass(module, f, cl, AB_STORE, true);
             if (store != null) {
                 for (String name : new String[]{"f", "b"}) {
                     Method m = HookKit.findMethodInHierarchy(module, f, store, name,
@@ -70,7 +70,7 @@ public final class AbTestHooks {
                 }
             }
 
-            Class<?> center = HookKit.findClass(module, f, cl, CONFIG_CENTER);
+            Class<?> center = HookKit.findClass(module, f, cl, CONFIG_CENTER, true);
             if (center != null) {
                 Method m = HookKit.findMethodInHierarchy(module, f, center, "l", String.class);
                 HookKit.install(module, f, "ConfigCenter#l", m, stringHook(module, f));

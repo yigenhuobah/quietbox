@@ -74,7 +74,7 @@ final class FeedCardHooks {
 
     private static void installOne(XposedModule module, ClassLoader cl, Feature f, String kind) {
         try {
-            Class<?> feed = HookKit.findClass(module, f, cl, FEED_LIST);
+            Class<?> feed = HookKit.findClass(module, f, cl, FEED_LIST, true);
             if (feed != null) {
                 HookKit.install(module, f, "ExploreView.S",
                         HookKit.findByNameAndArity(feed, "S", 1),

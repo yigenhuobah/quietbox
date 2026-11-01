@@ -115,6 +115,7 @@ public final class Hooks {
         }
         if (mainProcess) {
             Report.start();
+            Report.installCrashHandler();
         } else {
             module.log(Log.INFO, TAG, "non-main process, status report disabled");
         }

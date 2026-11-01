@@ -34,11 +34,11 @@ final class SearchAdHooks {
     static void install(XposedModule module, ClassLoader cl) {
         Feature f = Feature.SEARCH_AD_FILTER;
         try {
-            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ);
+            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ, true);
             if (cls == null) {
                 return;
             }
-            Class<?> ad = HookKit.findClass(module, f, cl, AD_ENTITY);
+            Class<?> ad = HookKit.findClass(module, f, cl, AD_ENTITY, true);
             if (ad == null) {
                 return;
             }

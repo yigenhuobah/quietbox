@@ -34,7 +34,7 @@ final class NoteDetailAdHooks {
     static void install(XposedModule module, ClassLoader cl) {
         Feature f = Feature.NOTE_DETAIL_AD_BANNER;
         try {
-            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ);
+            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ, true);
             if (cls == null) {
                 return;
             }

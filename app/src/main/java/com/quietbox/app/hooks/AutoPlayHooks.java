@@ -29,7 +29,7 @@ final class AutoPlayHooks {
         Feature f = Feature.AUTOPLAY_PREFERENCE;
         try {
             for (String clazz : new String[]{DETAIL, TAB}) {
-                Class<?> cls = HookKit.findClass(module, f, cl, clazz);
+                Class<?> cls = HookKit.findClass(module, f, cl, clazz, true);
                 for (String name : METHODS) {
                     HookKit.install(module, f, shortName(clazz) + "#" + name,
                             HookKit.findMethod(module, f, cls, name),

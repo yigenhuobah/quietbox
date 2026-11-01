@@ -128,21 +128,25 @@ final class ScreenShotHooks {
     private static void bindOuter(XposedModule module, Feature f, Class<?> outer) {
         String key = outer.getName();
         synchronized (BOUND) {
-            // 只挡「已成功挂载」的类：install 失败不登记，下次观察者注册时还能重试。
-            if (BOUND.contains(key)) {
+            // 原子占位：add 返回 false 说明已被占位（挂载中或已挂载），直接返回，
+            // 消除 contains 检查与登记之间的竞态窗口（双线程重复 install）。
+            if (!BOUND.add(key)) {
                 return;
             }
         }
         Method m = mediaMethod(outer);
         if (m == null) {
+            synchronized (BOUND) {
+                BOUND.remove(key);
+            }
             return;
         }
         if (!HookKit.install(module, f, key, m, mediaChangeHook(module, f, key))) {
-            // install 已记 ERROR 日志与 skip；保留重试机会，不写「已定位」。
+            // install 已记 ERROR 日志与 skip；释放占位保留重试机会，不写「已定位」。
+            synchronized (BOUND) {
+                BOUND.remove(key);
+            }
             return;
-        }
-        synchronized (BOUND) {
-            BOUND.add(key);
         }
         HookState.note(f, "已定位检测器类 " + key);
     }

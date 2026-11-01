@@ -40,11 +40,11 @@ final class ScoreGuideHooks {
     static void install(XposedModule module, ClassLoader cl) {
         Feature f = Feature.SCORE_GUIDE_BLOCK;
         try {
-            Class<?> dialog = HookKit.findClass(module, f, cl, DIALOG_CLAZZ);
+            Class<?> dialog = HookKit.findClass(module, f, cl, DIALOG_CLAZZ, true);
             Method onCreate = HookKit.findMethod(module, f, dialog, "onCreate", Bundle.class);
             HookKit.install(module, f, "onCreate", onCreate, onCreateHooker(module, f));
 
-            Class<?> app = HookKit.findClass(module, f, cl, "com.xingin.xhs.app.ShareApplication");
+            Class<?> app = HookKit.findClass(module, f, cl, "com.xingin.xhs.app.ShareApplication", true);
             HookKit.install(module, f, GP_REVIEW_METHOD,
                     HookKit.findMethod(module, f, app, GP_REVIEW_METHOD),
                     HookKit.skipVoid(module, f, GP_REVIEW_METHOD));

@@ -84,7 +84,7 @@ final class CopyLinkHooks {
         try {
             // 主挂：真正的剪贴板写入点 jv8/e.b。ClipboardProxyImpl.setPrimaryClip 只是 SPI
             // 回调（只打日志、不写剪贴板），在那里改 ClipData 对剪贴板零效果，已弃用。
-            Class<?> writer = HookKit.findClass(module, f, cl, CLIP_WRITER);
+            Class<?> writer = HookKit.findClass(module, f, cl, CLIP_WRITER, true);
             Method write = HookKit.findMethod(module, f, writer, "b",
                     ClipboardManager.class, ClipData.class);
             HookKit.install(module, f, "jv8.e#b(setPrimaryClip)",
