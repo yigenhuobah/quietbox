@@ -6,3 +6,6 @@ contact_links:
   - name: 常见问题
     url: https://github.com/yigenhuobah/quietbox#常见问题
     about: 开关没反应、版本不匹配、装到旧版本等常见情况的排查步骤
+  - name: 参与开发 / 提交代码
+    url: https://github.com/yigenhuobah/quietbox/blob/main/CONTRIBUTING.md
+    about: 只接受源码 PR；构建、测试、代码约定与 Feature 编号规则见这里
