@@ -60,6 +60,8 @@ public final class Hooks {
                 (module, cl, config, f) -> WatermarkHooks.install(module, cl));
         map.put(Feature.LIVE_PHOTO_WATERMARK,
                 (module, cl, config, f) -> LivePhotoWatermarkHooks.install(module, cl));
+        map.put(Feature.FORCE_SAVE,
+                (module, cl, config, f) -> ForceSaveHooks.install(module, cl));
         map.put(Feature.AUTOPLAY_PREFERENCE,
                 (module, cl, config, f) -> AutoPlayHooks.install(module, cl));
         map.put(Feature.SEARCH_AD_FILTER,

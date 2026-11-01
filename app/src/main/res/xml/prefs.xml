@@ -118,6 +118,10 @@
             android:icon="@drawable/ic_group_en"
             android:key="en_3_live_photo_watermark" />
 
+        <com.quietbox.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_en"
+            android:key="en_4_force_save" />
+
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/group_ex">

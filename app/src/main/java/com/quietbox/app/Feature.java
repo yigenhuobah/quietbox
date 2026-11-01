@@ -105,6 +105,10 @@ public enum Feature {
             R.string.f_en_3_live_photo_watermark_title,
             R.string.f_en_3_live_photo_watermark_summary,
             false, Group.EN, null),
+    FORCE_SAVE("EN-04", "en_4_force_save",
+            R.string.f_en_4_force_save_title,
+            R.string.f_en_4_force_save_summary,
+            false, Group.EN, null),
 
     NOTE_UNAVAILABLE_VIEW("EX-01", "p1_15_note_unavailable_view",
             R.string.f_p1_15_note_unavailable_view_title,

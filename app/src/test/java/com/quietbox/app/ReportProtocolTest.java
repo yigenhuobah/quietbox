@@ -30,7 +30,7 @@ public class ReportProtocolTest {
     }
 
     @Test
-    public void validKeyAcceptsAll75GeneratedKeys() {
+    public void validKeyAcceptsAll78GeneratedKeys() {
         int count = 0;
         for (Feature f : Feature.values()) {
             assertTrue(ReportProtocol.validKey(ReportProtocol.PREFIX_REG + f.key));
@@ -38,8 +38,8 @@ public class ReportProtocolTest {
             assertTrue(ReportProtocol.validKey(ReportProtocol.PREFIX_SKIP + f.key));
             count += 3;
         }
-        assertEquals(75, count);
-        // crash0/1/2 是白名单里的固定键（非 Feature 派生），不参与上面的 75 计数。
+        assertEquals(78, count);
+        // crash0/1/2 是白名单里的固定键（非 Feature 派生），不参与上面的 78 计数。
         assertTrue(ReportProtocol.validKey(ReportProtocol.KEY_CRASH_0));
         assertTrue(ReportProtocol.validKey(ReportProtocol.KEY_CRASH_1));
         assertTrue(ReportProtocol.validKey(ReportProtocol.KEY_CRASH_2));

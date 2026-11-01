@@ -87,6 +87,8 @@
     <string name="f_p1_11_watermark_policy_summary">保存图片时不带水印</string>
     <string name="f_en_3_live_photo_watermark_title">实况图去水印</string>
     <string name="f_en_3_live_photo_watermark_summary">保存实况图（Live Photo）不带水印；会切换实况保存链路，默认关闭</string>
+    <string name="f_en_4_force_save_title">强制允许保存</string>
+    <string name="f_en_4_force_save_summary">作者关闭下载的笔记也允许保存（默认关闭；请尊重创作者意愿，勿用于侵权）</string>
     <string name="f_p1_12_autoplay_preference_title">自动播放</string>
     <string name="f_p1_12_autoplay_preference_summary">详情页与视频页不自动播放；画质偏好本版本不提供</string>
     <string name="f_p1_13_search_ad_filter_title">搜索广告过滤</string>

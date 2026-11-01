@@ -53,13 +53,14 @@ public class FeatureTest {
         EXPECTED_IDS.put("p1_11_watermark_policy", "EN-01");
         EXPECTED_IDS.put("p0_6_video_default_mute", "EN-02");
         EXPECTED_IDS.put("en_3_live_photo_watermark", "EN-03");
+        EXPECTED_IDS.put("en_4_force_save", "EN-04");
         EXPECTED_IDS.put("p1_15_note_unavailable_view", "EX-01");
         EXPECTED_IDS.put("p2_1_ab_test_panel", "EX-02");
     }
 
     @Test
-    public void twentyFiveFeaturesPresent() {
-        assertEquals("Feature 数量必须是 25", 25, Feature.values().length);
+    public void twentySixFeaturesPresent() {
+        assertEquals("Feature 数量必须是 26", 26, Feature.values().length);
     }
 
     @Test
