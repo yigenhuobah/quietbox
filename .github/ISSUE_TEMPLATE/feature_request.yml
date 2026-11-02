@@ -36,7 +36,7 @@ body:
     id: module-version
     attributes:
       label: 模块版本（可选）
-      placeholder: "0.9.0 (14)"
+      placeholder: "0.9.4 (18)"
     validations:
       required: false
   - type: textarea

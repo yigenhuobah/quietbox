@@ -18,7 +18,7 @@ body:
     attributes:
       label: 模块版本
       description: 模块设置页「关于」可见版本名与 versionCode
-      placeholder: "0.9.0 (14)"
+      placeholder: "0.9.4 (18)"
     validations:
       required: true
   - type: input
