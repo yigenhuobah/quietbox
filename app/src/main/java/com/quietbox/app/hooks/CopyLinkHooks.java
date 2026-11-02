@@ -23,7 +23,7 @@ import io.github.libxposed.api.XposedModule;
 /**
  * PV-03 复制链接净化。
  *
- * 2026-10-16 DexSQL 复核（报告 E:\tmp-xhs-mod\agy-scratch\verify_p1_9.md）：
+ * 2026-10-16 DexSQL 复核（内部记录）：
  * 旧实现挂在混淆类 e2c.i 上（跨版本会被 R8 重命名，脆弱），且只覆盖 note 详情页。
  * 真实链路：所有"复制链接"表面 → Lredutils/q.a(ctx,"ug-share-copy-link",text)
  *   → Lp52/a → Ljv8/e.b（全 App 剪贴板写入收口）

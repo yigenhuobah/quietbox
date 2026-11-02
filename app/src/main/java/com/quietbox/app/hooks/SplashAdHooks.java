@@ -17,8 +17,7 @@ import io.github.libxposed.api.XposedModule;
 /**
  * AD-01 开屏广告跳过。
  *
- * 开屏广告有两条互不覆盖的展示路径（2026-10-16 DexSQL 复核，报告
- * E:\tmp-xhs-mod\agy-scratch\splash_ad_path.md）：
+ * 开屏广告有两条互不覆盖的展示路径（2026-10-16 DexSQL 复核，内部记录）：
  *
  * Path A｜首页 Controller 内嵌 Fragment（已覆盖）
  *   AdsIndexSpiImp 的 open 系与 can 系方法全部只有一个调用方 Ljcd/t;->onAttach，

@@ -18,7 +18,7 @@ import io.github.libxposed.api.XposedModule;
 /**
  * AD-04 广告外跳拦截。
  *
- * 链路（2026-10-16 DexSQL 复核，报告 E:\tmp-xhs-mod\agy-scratch\verify_p1_7.md；
+ * 链路（2026-10-16 DexSQL 复核，内部记录；
  * 9.52.0 汇聚点恢复为真实类名 XYWebViewUtil，方法签名不变；9.51.0 为 k1e/i0，
  * 9.50.0 为 p0e/i0）：
  *   广告落地页 WebView（ExternalWebViewActivityV2）触发三方 scheme
