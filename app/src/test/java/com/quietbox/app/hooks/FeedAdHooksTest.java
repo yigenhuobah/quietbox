@@ -7,6 +7,7 @@ import static org.junit.Assert.assertTrue;
 import android.util.Log;
 
 import com.quietbox.app.Feature;
+import com.quietbox.app.HookState;
 
 import org.junit.Test;
 
@@ -45,6 +46,11 @@ public class FeedAdHooksTest {
             this.isAd = isAd;
             this.tag = tag;
         }
+    }
+
+    /** 没有 isAd 字段的假 note：模拟宿主字段改名后判定永久失效。 */
+    static class NoteWithoutIsAd {
+        String tag = "no-field";
     }
 
     private static int dropAds(XposedModule module, Feature f, String where, List<?> list)
@@ -131,5 +137,32 @@ public class FeedAdHooksTest {
                 logs.get(0).msg.contains("dropAds failed ExploreView.S"));
         assertTrue(logs.get(0).msg, logs.get(0).msg.contains(Feature.FEED_AD_FILTER.id));
         assertTrue(logs.get(0).t instanceof UnsupportedOperationException);
+    }
+
+    /**
+     * isAd 字段缺失（宿主改名）时判定只能返回 false，但必须留下 field: 诊断原因，
+     * 否则 AD-02 会永久静默失效、诊断页与 logcat 都无痕迹。
+     */
+    @Test
+    public void dropAds_missingIsAdField_recordsSkipReason() throws Exception {
+        List<LogRecord> logs = new ArrayList<>();
+        XposedModule module = newModule(logs);
+
+        List<NoteWithoutIsAd> list = new ArrayList<>();
+        list.add(new NoteWithoutIsAd());
+
+        int removed = dropAds(module, Feature.FEED_AD_FILTER, "ExploreView.S", list);
+
+        assertEquals(0, removed);
+        assertEquals(1, list.size());
+        boolean found = false;
+        for (String reason : HookState.skipReasons(Feature.FEED_AD_FILTER)) {
+            if (reason.startsWith("field:isAd 未找到")) {
+                found = true;
+                break;
+            }
+        }
+        assertTrue("字段缺失必须记录 field:isAd 诊断原因: "
+                + HookState.skipReasons(Feature.FEED_AD_FILTER), found);
     }
 }

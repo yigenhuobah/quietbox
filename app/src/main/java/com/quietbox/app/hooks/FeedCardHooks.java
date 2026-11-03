@@ -2,6 +2,7 @@ package com.quietbox.app.hooks;
 
 import com.quietbox.app.Config;
 import com.quietbox.app.Feature;
+import com.quietbox.app.HookState;
 
 import java.lang.reflect.Field;
 import java.util.HashMap;
@@ -103,7 +104,7 @@ final class FeedCardHooks {
                 if (arg instanceof List) {
                     List<?> list = (List<?>) arg;
                     seenOnce(module, f, where, list.size());
-                    int removed = drop(list, kind);
+                    int removed = drop(module, f, list, kind);
                     if (removed > 0) {
                         HookKit.hit(module, f, where + " removed=" + removed);
                     }
@@ -124,19 +125,21 @@ final class FeedCardHooks {
         HookKit.info(module, f.id + " seen " + where + " size=" + size);
     }
 
-    private static int drop(List<?> list, String kind) {
+    private static int drop(XposedModule module, Feature f, List<?> list, String kind) {
         int removed = 0;
         try {
             Iterator<?> it = list.iterator();
             while (it.hasNext()) {
                 Object note = it.next();
-                if (note != null && matches(note, kind)) {
+                if (note != null && matches(f, note, kind)) {
                     it.remove();
                     removed++;
                 }
             }
-        } catch (Throwable ignored) {
-            // 不可变列表等异常：原样放行，不影响原逻辑。
+        } catch (Throwable t) {
+            // 不可变列表等异常：原样放行，不影响原逻辑；但必须记日志，否则该入口
+            // 的 AD-08/09/10 永久静默失效且无任何痕迹（HookKit 约定 2）。
+            HookKit.error(module, f.id + " drop failed " + kind, t);
         }
         return removed;
     }
@@ -145,8 +148,8 @@ final class FeedCardHooks {
      * 判定某一类卡片：modelType 非空时只按类型判定；缺失（null 或空串）时才用字段兜底。
      * 投票卡无字段兜底。
      */
-    private static boolean matches(Object note, String kind) {
-        String modelType = modelType(note);
+    private static boolean matches(Feature f, Object note, String kind) {
+        String modelType = modelType(f, note);
         String mt = modelType == null ? null : modelType.trim().toLowerCase(java.util.Locale.ROOT);
         if (mt != null && !mt.isEmpty()) {
             boolean matched;
@@ -170,9 +173,9 @@ final class FeedCardHooks {
         // modelType 缺失时才用字段兜底
         switch (kind) {
             case "live":
-                return nonNull(note, LIVE, "live");
+                return nonNull(f, note, LIVE, "live");
             case "goods":
-                return nonNull(note, GOODS_V2, "goodsNoteV2");
+                return nonNull(f, note, GOODS_V2, "goodsNoteV2");
             default:
                 return false;
         }
@@ -188,9 +191,9 @@ final class FeedCardHooks {
         android.util.Log.i("QuietBox", "AD-08/09/10 modelType=" + mt);
     }
 
-    private static String modelType(Object note) {
+    private static String modelType(Feature f, Object note) {
         try {
-            Field fld = cached(MODEL_TYPE, note, "modelType");
+            Field fld = cached(f, MODEL_TYPE, note, "modelType");
             if (fld == null) {
                 return null;
             }
@@ -201,16 +204,16 @@ final class FeedCardHooks {
         }
     }
 
-    private static boolean nonNull(Object note, Map<Class<?>, Field> cache, String name) {
+    private static boolean nonNull(Feature f, Object note, Map<Class<?>, Field> cache, String name) {
         try {
-            Field fld = cached(cache, note, name);
+            Field fld = cached(f, cache, note, name);
             return fld != null && fld.get(note) != null;
         } catch (Throwable t) {
             return false;
         }
     }
 
-    private static Field cached(Map<Class<?>, Field> cache, Object note, String name) {
+    private static Field cached(Feature f, Map<Class<?>, Field> cache, Object note, String name) {
         Class<?> cls = note.getClass();
         synchronized (cache) {
             if (cache.containsKey(cls)) {
@@ -218,6 +221,11 @@ final class FeedCardHooks {
             }
             Field found = resolve(cls, name);
             cache.put(cls, found);
+            if (found == null) {
+                // 每个类只记一次（null 也进缓存）：字段改名后兜底判定会永久静默
+                // 失效，必须留下可诊断的原因。
+                HookState.markNotFound(f, "field:" + name + " 未找到 " + cls.getName());
+            }
             return found;
         }
     }

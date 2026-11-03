@@ -1,5 +1,15 @@
 # 更新日志
 
+## 0.9.5 - 2026-11-03
+
+### 修复
+
+- **全关时仍有诊断/崩溃捕获**：`Report.start()` / `installCrashHandler()` 移到 `anyEnabled()` 早退之前，并各自 try/catch，诊断失败不阻断安装。
+- **安装重试清理失败标记**：回滚 `sInstalled` 后重试前调用 `HookState.clearFailures`，避免上一轮 skip/crit 残留把已挂载功能误报为失败。
+- **写回滚保留确认值**：新增纯逻辑 `WriteGate`，commit 成功一律记入确认值（即使已被更新写入取代），只有最新结果更新 UI。
+- **字段锚点失败可见**：`FeedAdHooks` / `FeedCardHooks` / `LivePhotoWatermarkHooks` 的字段缺失/类型不符记 `field:` 原因。
+- **skip 原因列表**：`HookState` 由单个 `skip` 改为去重有序原因列表，上报摘要保留首条 critical + 最后一条 optional。
+
 ## 0.9.4 - 2026-11-01
 
 ### 新增

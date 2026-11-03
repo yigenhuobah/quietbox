@@ -119,6 +119,24 @@ public class ReportTest {
                 snap.get(ReportProtocol.PREFIX_CRIT + f.key));
     }
 
+    /**
+     * 多条 skip 原因时，回传值保留首条 critical + 最后一条 optional：
+     * 主锚点缺失不会因为后面又记了一条可选 skip 而从诊断里消失。
+     */
+    @Test
+    public void snapshotSkipSummaryKeepsFirstCriticalAndLastOptional() {
+        Feature f = Feature.AB_TEST_PANEL;
+        HookState.markNotFound(f, "optional-before");
+        HookState.markNotFoundCritical(f, "critical");
+        HookState.markNotFound(f, "optional-after");
+
+        Map<String, String> snap = Report.snapshot();
+
+        assertEquals("critical | optional-after",
+                snap.get(ReportProtocol.PREFIX_SKIP + f.key));
+        assertEquals("1", snap.get(ReportProtocol.PREFIX_CRIT + f.key));
+    }
+
     /** crash0/1/2 必须始终出现在快照里：无崩溃时为空串（覆盖清掉旧会话残留）。 */
     @Test
     public void snapshotAlwaysCarriesThreeCrashKeys() {

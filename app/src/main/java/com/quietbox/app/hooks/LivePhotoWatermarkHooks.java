@@ -115,7 +115,7 @@ final class LivePhotoWatermarkHooks {
                         try {
                             List<Object> args = chain.getArgs();
                             if (args.size() >= 2) {
-                                set = applyFeedbackFlags(args.get(1));
+                                set = applyFeedbackFlags(f, args.get(1));
                             }
                             HookKit.hit(module, f, ENTRY_FEEDBACK + ".e/h set=" + set);
                         } catch (Throwable t) {
@@ -177,24 +177,43 @@ final class LivePhotoWatermarkHooks {
      * @return 实际置位的字段数（0~2）；target 为 null 返回 -1
      */
     static int applyFeedbackFlags(@Nullable Object target) {
+        return applyFeedbackFlags(null, target);
+    }
+
+    /**
+     * 带诊断的重载：字段缺失/类型不符时给 f 记 skip，供诊断页定位宿主字段改名。
+     * 传入 null Feature 时与 {@link #applyFeedbackFlags(Object)} 完全一致。
+     */
+    static int applyFeedbackFlags(@Nullable Feature f, @Nullable Object target) {
         if (target == null) {
             return -1;
         }
-        return setBooleanTrue(target, "e") + setBooleanTrue(target, "h");
+        return setBooleanTrue(f, target, "e") + setBooleanTrue(f, target, "h");
     }
 
     /** 单字段置 true；字段不存在、类型不符或反射失败都返回 0，不抛出。 */
-    private static int setBooleanTrue(Object target, String name) {
+    private static int setBooleanTrue(@Nullable Feature f, Object target, String name) {
         try {
             Field field = target.getClass().getDeclaredField(name);
             if (field.getType() != boolean.class) {
+                markFieldMiss(f, target, name, "类型不符");
                 return 0;
             }
             field.setAccessible(true);
             field.setBoolean(target, true);
             return 1;
         } catch (Throwable t) {
+            // 字段缺失时保存链路仍会继续（只是不去水印），但必须留下诊断原因，
+            // 否则宿主改字段名后本功能会永久静默失效。
+            markFieldMiss(f, target, name, "未找到");
             return 0;
+        }
+    }
+
+    private static void markFieldMiss(@Nullable Feature f, Object target, String name, String why) {
+        if (f != null) {
+            HookState.markNotFound(f,
+                    "field:" + name + " " + why + " " + target.getClass().getName());
         }
     }
 }

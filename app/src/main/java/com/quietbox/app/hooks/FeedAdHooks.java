@@ -91,7 +91,7 @@ final class FeedAdHooks {
             public Object intercept(XposedInterface.Chain chain) throws Throwable {
                 try {
                     Object note = chain.getArg(1);
-                    if (note != null && isAd(note)) {
+                    if (note != null && isAd(f, note)) {
                         HookKit.hit(module, f, "ExploreView.g0 blocked ad insert");
                         return null;
                     }
@@ -157,7 +157,7 @@ final class FeedAdHooks {
             Iterator<?> it = list.iterator();
             while (it.hasNext()) {
                 Object note = it.next();
-                if (note != null && isAd(note)) {
+                if (note != null && isAd(f, note)) {
                     it.remove();
                     removed++;
                 }
@@ -170,20 +170,26 @@ final class FeedAdHooks {
         return removed;
     }
 
-    private static boolean isAd(Object note) {
+    private static boolean isAd(Feature f, Object note) {
+        Class<?> cls = note.getClass();
         try {
             Field fld;
-            Class<?> cls = note.getClass();
             synchronized (IS_AD) {
                 if (IS_AD.containsKey(cls)) {
                     fld = IS_AD.get(cls);
                 } else {
                     fld = resolveIsAd(cls);
                     IS_AD.put(cls, fld);
+                    if (fld == null) {
+                        // 每个类只记一次（null 也进缓存）：字段改名后该入口会永久
+                        // 静默失效，必须留下可诊断的原因。
+                        HookState.markNotFound(f, "field:isAd 未找到 " + cls.getName());
+                    }
                 }
             }
             return fld != null && fld.getBoolean(note);
         } catch (Throwable t) {
+            HookState.markNotFound(f, "field:isAd 读取失败 " + cls.getName());
             return false;
         }
     }

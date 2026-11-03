@@ -119,8 +119,8 @@ final class Report {
      *
      * 幂等（{@link #sCrashHandlerInstalled} 保证只包一次）；previous 先保存，自定义
      * handler 内先写崩溃再透传 previous（非空时），全程 try/catch：绝不因我们抛异常、
-     * 绝不改变目标 App 原有的异常处理行为。仅主进程、在 Hooks.installAll 的
-     * config/anyEnabled 早退之后调用。
+     * 绝不改变目标 App 原有的异常处理行为。仅主进程调用；调用点在 Hooks.installAll
+     * 读取配置之后、功能开关判断之前——全部功能关闭时也要捕获崩溃。
      */
     static synchronized void installCrashHandler() {
         if (sCrashHandlerInstalled) {
@@ -268,7 +268,7 @@ final class Report {
                 out.put(StatusProvider.PREFIX_HIT + f.key, String.valueOf(hits));
             }
             out.put(StatusProvider.PREFIX_SKIP + f.key,
-                    truncate(HookState.skipReason(f)));
+                    truncate(HookState.skipSummary(f)));
             out.put(StatusProvider.PREFIX_CRIT + f.key,
                     HookState.hasCriticalSkip(f) ? "1" : "");
         }

@@ -13,9 +13,7 @@ import android.widget.Toast;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -61,15 +59,8 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     /** 后台失败计数查询句柄；只允许最新一次结果更新横幅。 */
     private Future<?> mBannerFuture;
     private long mBannerSeq;
-    /** 每个 key 最近一次写入的序号：旧回调不能覆盖新状态。 */
-    private final Map<String, Long> mWriteSeq = new HashMap<>();
-    /**
-     * 每个 key 最近一次确认落盘成功的值：写失败回滚用它，避免主线程再读 binder。
-     * 只由 commit 成功的回调写入；refresh() 的回读值不能写进来——RemotePreferences.commit()
-     * 先改内存再走 binder，失败时内存不回滚，回读到的是没落盘的新值。
-     */
-    private final Map<String, Boolean> mConfirmed = new HashMap<>();
-    private long mWriteCounter;
+    /** 每个 key 最近一次写入的序号与最近一次确认落盘成功的值。 */
+    private final WriteGate mWriteGate = new WriteGate();
     /** versionName 在 Fragment 生命周期内不变，只读一次 PackageManager。 */
     private String mVersionName;
 
@@ -102,8 +93,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         }
         mBannerSeq++;
         // 旧写入的回调不能再改已经销毁的 view。
-        mWriteSeq.clear();
-        mConfirmed.clear();
+        mWriteGate.clear();
         // 二级页返回或旋转后 view 会重建：取消过的查询不能靠 1 秒节流挡掉，
         // 否则状态卡可能停在被取消前的旧状态。
         mHasRefreshed = false;
@@ -154,8 +144,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
      *         MaterialSwitch 会回滚，同时 Toast 提示。
      */
     private boolean writeBoolean(String key, boolean requested) {
-        long seq = ++mWriteCounter;
-        mWriteSeq.put(key, seq);
+        long seq = mWriteGate.begin(key);
         boolean accepted = mStore.put(key, requested,
                 committed -> onWriteResult(key, requested, seq, committed));
         if (!accepted) {
@@ -174,20 +163,20 @@ public class SettingsFragment extends PreferenceFragmentCompat {
             if (!isAdded() || getView() == null) {
                 return;
             }
-            Long latest = mWriteSeq.get(key);
-            if (latest == null || latest.longValue() != seq) {
+            // 成功一律记入确认值（即使已被更新写入取代）；只有最新一次结果能改 UI。
+            boolean latest = mWriteGate.onResult(key, seq, committed, requested);
+            if (!latest) {
                 // 用户已经又改了一次，旧写入的结果不能覆盖新状态。
                 return;
             }
             if (ConfigWritePolicy.keepUiState(true, committed)) {
-                mConfirmed.put(key, requested);
                 return;
             }
             Toast.makeText(requireContext(), R.string.action_write_failed,
                     Toast.LENGTH_SHORT).show();
             Preference p = findPreference(key);
             if (p instanceof MaterialSwitchPreference) {
-                Boolean confirmed = mConfirmed.get(key);
+                Boolean confirmed = mWriteGate.rollback(key);
                 ((MaterialSwitchPreference) p).setCheckedValue(
                         confirmed != null ? confirmed : !requested);
             }
@@ -247,7 +236,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                 MaterialSwitchPreference sw = (MaterialSwitchPreference) p;
                 boolean checked = mStore.get(f.key, f.defaultEnabled);
                 sw.setCheckedValue(checked);
-                // 这里的回读值不能写进 mConfirmed：写入在途或失败时 RemotePreferences
+                // 这里的回读值不能写进确认值：写入在途或失败时 RemotePreferences
                 // 的内存已是新值，只有 commit 成功的回调才有资格确认落盘（见 onWriteResult）。
                 // 框架没绑定时写不进去，置灰避免“改了没用”；blocked 始终置灰。
                 sw.setEnabled(writable && !f.blocked());

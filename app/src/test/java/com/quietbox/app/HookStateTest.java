@@ -8,6 +8,7 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -50,6 +51,105 @@ public class HookStateTest {
         HookState.markNotFoundCritical(f, "类未找到 x");
         assertEquals("类未找到 x", HookState.skipReason(f));
         assertTrue("类缺失必须标 critical", HookState.hasCriticalSkip(f));
+    }
+
+    /** 原因列表：后一条不再覆盖前一条，按首次出现顺序去重保留。 */
+    @Test
+    public void skipReasonsKeepAllUniqueReasonsInOrder() {
+        Feature f = Feature.FORCE_SAVE;
+        HookState.markNotFound(f, "first");
+        HookState.markNotFound(f, "second");
+        HookState.markNotFound(f, "first");
+
+        assertEquals(Arrays.asList("first", "second"), HookState.skipReasons(f));
+        assertEquals("skipReason 仍返回最后一条，兼容旧展示", "second", HookState.skipReason(f));
+        assertFalse(HookState.hasCriticalSkip(f));
+    }
+
+    /** 上报摘要：首条 critical + 最后一条 optional，主锚点缺失不会被后续可选 skip 覆盖。 */
+    @Test
+    public void skipSummaryKeepsFirstCriticalAndLastOptional() {
+        Feature f = Feature.LIVE_PHOTO_WATERMARK;
+        HookState.markNotFound(f, "only");
+        assertEquals("单条原因原样返回", "only", HookState.skipSummary(f));
+
+        HookState.markNotFoundCritical(f, "critical");
+        HookState.markNotFound(f, "optional-after");
+
+        assertEquals("首条 critical + 最后一条 optional",
+                "critical | optional-after", HookState.skipSummary(f));
+        assertEquals("optional-after", HookState.skipReason(f));
+        assertTrue(HookState.hasCriticalSkip(f));
+    }
+
+    /** 重试前清失败标记：原因列表与 critical 一起清空，skip 回到 null。 */
+    @Test
+    public void clearFailuresDropsReasonsAndCriticalFlag() {
+        Feature f = Feature.FORCE_SAVE;
+        HookState.markNotFoundCritical(f, "crit");
+        HookState.markNotFound(f, "opt");
+        assertTrue(HookState.hasCriticalSkip(f));
+
+        HookState.clearFailures(f);
+
+        assertTrue("原因列表必须清空", HookState.skipReasons(f).isEmpty());
+        assertNull("skip 兼容字段必须回到 null", HookState.skipReason(f));
+        assertNull(HookState.skipSummary(f));
+        assertFalse("critical 标记必须清空，重试成功才不会继续报失败",
+                HookState.hasCriticalSkip(f));
+    }
+
+    /**
+     * 全部原因都是 critical 时，MAX_SKIP_REASONS 仍必须生效。
+     *
+     * 旧实现只在「首条之后存在非 critical 原因」时才丢旧项；若每条都标了
+     * critical，容量检查形同虚设，列表随新原因无界增长。这里用 40 条不同的
+     * critical 原因验证上限：保留首条与最新一条，丢弃次旧项。
+     */
+    @Test
+    public void skipReasonsStayBoundedWhenAllReasonsAreCritical() {
+        Feature f = Feature.SHAKE_JUMP_DISABLE;
+        HookState.clearFailures(f);
+        for (int i = 0; i < 40; i++) {
+            HookState.markNotFoundCritical(f, "critical-" + i);
+        }
+
+        List<String> reasons = HookState.skipReasons(f);
+        assertEquals("全部为 critical 时也不能超过上限", 32, reasons.size());
+        assertEquals("首条原因保留，作为首个 critical 的展示锚点",
+                "critical-0", reasons.get(0));
+        assertEquals("最新原因保留", "critical-39", reasons.get(31));
+        assertTrue("被丢弃的 critical 原因不能清掉失败标记",
+                HookState.hasCriticalSkip(f));
+        assertEquals("上报摘要仍带首个 critical 与最新原因",
+                "critical-0 | critical-39", HookState.skipSummary(f));
+    }
+
+    /**
+     * 容量已满时的淘汰优先级：先丢最旧的非 critical 原因，critical 原因只有在
+     * 没有可选项时才让位，不能因为兜底逻辑把 critical 全丢掉。
+     */
+    @Test
+    public void evictionDropsOldestOptionalBeforeCritical() {
+        Feature f = Feature.SHAKE_JUMP_DISABLE;
+        HookState.clearFailures(f);
+        HookState.markNotFound(f, "first-optional");
+        HookState.markNotFoundCritical(f, "critical-1");
+        HookState.markNotFound(f, "optional-2");
+        for (int i = 3; i < 32; i++) {
+            HookState.markNotFoundCritical(f, "critical-" + i);
+        }
+        assertEquals("前置：列表已满", 32, HookState.skipReasons(f).size());
+
+        HookState.markNotFoundCritical(f, "newest");
+
+        List<String> reasons = HookState.skipReasons(f);
+        assertEquals(32, reasons.size());
+        assertEquals("首条原因始终保留", "first-optional", reasons.get(0));
+        assertEquals("critical 原因不应被优先淘汰", "critical-1", reasons.get(1));
+        assertFalse("最旧的非 critical 原因应先被丢弃",
+                reasons.contains("optional-2"));
+        assertEquals("newest", reasons.get(31));
     }
 
     @Test

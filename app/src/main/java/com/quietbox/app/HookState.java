@@ -24,6 +24,12 @@ public final class HookState {
 
     private static final ConcurrentMap<Feature, State> STATES = new ConcurrentHashMap<>();
 
+    /**
+     * 单个功能最多保留的 skip 原因数。超出后优先丢最旧的非 critical 原因；
+     * 若剩下的原因全是 critical，则丢次旧项，始终保留首条与最新一条。
+     */
+    private static final int MAX_SKIP_REASONS = 32;
+
     private HookState() {
     }
 
@@ -31,12 +37,47 @@ public final class HookState {
         final Set<String> labels = ConcurrentHashMap.newKeySet();
         final Set<String> criticalSkips = ConcurrentHashMap.newKeySet();
         final AtomicLong hits = new AtomicLong();
+        /**
+         * 去重后的 skip 原因，按首次出现顺序排列；最后一条与 {@link #skip} 相同。
+         * 锁 reasons 本身：hooker 线程追加、诊断线程遍历。
+         */
+        final List<String> reasons = new ArrayList<>();
+        /** 兼容旧字段：最后一条原因。 */
         volatile String skip;
 
         void markSkip(String reason) {
-            if (reason != null) {
+            if (reason == null || reason.isEmpty()) {
+                return;
+            }
+            synchronized (reasons) {
+                if (reasons.contains(reason)) {
+                    return;
+                }
+                if (reasons.size() >= MAX_SKIP_REASONS) {
+                    evictOldestReason();
+                }
+                reasons.add(reason);
                 skip = reason;
             }
+        }
+
+        /**
+         * 容量已满时丢弃一条旧原因：优先丢首条之后最旧的非 critical 原因；
+         * 若剩下的全是 critical（没有可丢的可选项），则丢次旧项（下标 1）。
+         *
+         * 首条原因始终保留，作为「首个 critical」的展示锚点，因此即使所有原因
+         * 都是 critical，列表也不会超过 {@link #MAX_SKIP_REASONS}。
+         * 被丢弃原因若曾标过 critical，其标记仍留在 criticalSkips 中，
+         * hasCriticalSkip 的「本会话出现过主锚点缺失」语义不受影响。
+         */
+        private void evictOldestReason() {
+            for (int i = 1; i < reasons.size(); i++) {
+                if (!criticalSkips.contains(reasons.get(i))) {
+                    reasons.remove(i);
+                    return;
+                }
+            }
+            reasons.remove(1);
         }
     }
 
@@ -67,7 +108,8 @@ public final class HookState {
 
     /**
      * 可选锚点缺失：只记录 skip 供诊断页展示，不计入失败横幅。
-     * 方法改名/签名变化都属于这一类。
+     * 方法改名/签名变化都属于这一类。原因按出现顺序去重保留，
+     * {@link #skipReason} 仍返回最后一条以兼容旧展示。
      */
     public static void markNotFound(Feature f, String reason) {
         state(f).markSkip(reason);
@@ -130,6 +172,72 @@ public final class HookState {
     }
 
     /**
+     * 本会话记录过的全部 skip 原因（按首次出现顺序去重）。
+     *
+     * 旧实现只有一个 volatile String，后一条直接覆盖前一条：主锚点缺失后又记一条
+     * 可选锚点缺失，诊断页与上报就只剩后者。这里保留完整列表供诊断展示。
+     */
+    public static List<String> skipReasons(Feature f) {
+        State s = STATES.get(f);
+        if (s == null) {
+            return Collections.emptyList();
+        }
+        synchronized (s.reasons) {
+            return new ArrayList<>(s.reasons);
+        }
+    }
+
+    /**
+     * 上报用的 skip 摘要：首条 critical 原因 + 最后一条原因（相同时只留一条），
+     * 以 " | " 连接。保证「主锚点缺失」不会因为后面又记了一条可选 skip 而从
+     * 回传里消失，同时仍能带出最新的可选失败。
+     */
+    public static String skipSummary(Feature f) {
+        State s = STATES.get(f);
+        if (s == null) {
+            return null;
+        }
+        List<String> reasons;
+        synchronized (s.reasons) {
+            reasons = new ArrayList<>(s.reasons);
+        }
+        if (reasons.isEmpty()) {
+            return null;
+        }
+        String last = reasons.get(reasons.size() - 1);
+        String firstCritical = null;
+        for (String r : reasons) {
+            if (s.criticalSkips.contains(r)) {
+                firstCritical = r;
+                break;
+            }
+        }
+        if (firstCritical == null || firstCritical.equals(last)) {
+            return last;
+        }
+        return firstCritical + " | " + last;
+    }
+
+    /**
+     * 清除该功能的失败标记（skip 原因列表与 critical 集合）；labels/hits 保留。
+     *
+     * 用于 QuietBoxModule 回滚 sInstalled 后的重试：失败标记只增不清，上一轮安装
+     * 记下的 skip/crit 若不在下一轮安装前清掉，重试成功的功能会继续上报 crit=1
+     * 与旧 skip，诊断页和失败横幅会把已挂载的功能判成整体失效。
+     */
+    public static void clearFailures(Feature f) {
+        State s = STATES.get(f);
+        if (s == null) {
+            return;
+        }
+        s.criticalSkips.clear();
+        synchronized (s.reasons) {
+            s.reasons.clear();
+            s.skip = null;
+        }
+    }
+
+    /**
      * 挂载统计快照。计数按「功能」去重：
      * ok = 至少注册成功一个挂载点的功能数，miss/bad = 有 skip 的功能数。
      */
@@ -156,7 +264,7 @@ public final class HookState {
         synchronized (STATES) {
             for (Feature f : STATES.keySet()) {
                 boolean hasLabel = !labels(f).isEmpty();
-                boolean hasSkip = skipReason(f) != null;
+                boolean hasSkip = !skipReasons(f).isEmpty();
                 if (hasLabel) {
                     ok++;
                 }

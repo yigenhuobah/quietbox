@@ -67,7 +67,21 @@ public class QuietBoxModule extends XposedModule {
         } catch (Throwable t) {
             // 安装失败时回滚标记，否则一次异常会让整个进程永久处于半挂载状态。
             sInstalled.set(false);
+            // 失败标记只增不清：下一轮 onPackageReady 重试前必须清掉上一轮的
+            // skip/crit，否则重试成功的功能仍会继续上报失败。
+            clearHookFailures();
             log(Log.ERROR, TAG, "install aborted, will retry on next package ready", t);
+        }
+    }
+
+    /** 清掉所有 Feature 的失败标记；单个清理失败不得阻断重试。 */
+    private static void clearHookFailures() {
+        for (Feature f : Feature.values()) {
+            try {
+                HookState.clearFailures(f);
+            } catch (Throwable ignored) {
+                // HookState 是进程级诊断状态，清理失败只影响展示，不影响安装。
+            }
         }
     }
 }

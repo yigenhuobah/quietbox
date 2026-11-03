@@ -111,15 +111,26 @@ public final class Hooks {
             module.log(Log.ERROR, TAG, "config load failed", t);
             return;
         }
+        // 诊断与崩溃捕获不依赖任何功能开启：全部关闭时也要回传「无功能」和崩溃，
+        // 否则用户关掉所有开关后诊断页永远空白、崩溃也无人记录。
+        // 两项都只做诊断，失败只记日志，绝不阻断后续安装。
+        if (mainProcess) {
+            try {
+                Report.start();
+            } catch (Throwable t) {
+                module.log(Log.WARN, TAG, "status report start failed", t);
+            }
+            try {
+                Report.installCrashHandler();
+            } catch (Throwable t) {
+                module.log(Log.WARN, TAG, "crash handler install failed", t);
+            }
+        } else {
+            module.log(Log.INFO, TAG, "non-main process, status report disabled");
+        }
         if (!config.anyEnabled()) {
             module.log(Log.INFO, TAG, "all features disabled, nothing to hook");
             return;
-        }
-        if (mainProcess) {
-            Report.start();
-            Report.installCrashHandler();
-        } else {
-            module.log(Log.INFO, TAG, "non-main process, status report disabled");
         }
         for (Feature f : Feature.values()) {
             if (f.blocked()) {
