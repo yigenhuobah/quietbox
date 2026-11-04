@@ -10,6 +10,7 @@ import android.os.SystemClock;
 import android.util.Log;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 
@@ -31,6 +32,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
 
     private static final String TAG = "QuietBox";
     private static final String TARGET = "com.xingin.xhs";
+    private static final String PREF_RESET = "reset_defaults";
 
     /** 两次 refresh 的最小间隔，压掉 onCreatePreferences / onResume / 绑定回调三连。 */
     private static final long REFRESH_MIN_INTERVAL_MS = 1000L;
@@ -61,6 +63,8 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     private long mBannerSeq;
     /** 每个 key 最近一次写入的序号与最近一次确认落盘成功的值。 */
     private final WriteGate mWriteGate = new WriteGate();
+    /** 恢复默认在途：期间禁用入口，避免重复提交覆盖在途事务。 */
+    private boolean mResetInFlight;
     /** versionName 在 Fragment 生命周期内不变，只读一次 PackageManager。 */
     private String mVersionName;
 
@@ -71,6 +75,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         mStore = new ConfigStore(requireContext());
         bindFeatures();
         bindPages();
+        bindReset();
         refresh();
     }
 
@@ -191,6 +196,70 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                     + "\n" + getString(R.string.footer_compat,
                     getString(R.string.app_target_name), VersionGate.SUPPORTED_VERSION));
         }
+    }
+
+    /** 「恢复默认」入口：二次确认，写入期间禁用，结果只以 commit 回调为准。 */
+    private void bindReset() {
+        Preference reset = findPreference(PREF_RESET);
+        if (reset == null) {
+            Log.e(TAG, "preference missing for " + PREF_RESET);
+            return;
+        }
+        reset.setOnPreferenceClickListener(pref -> {
+            showResetDialog();
+            return true;
+        });
+    }
+
+    private void showResetDialog() {
+        if (mResetInFlight) {
+            return;
+        }
+        new AlertDialog.Builder(requireContext())
+                .setMessage(R.string.reset_confirm_message)
+                .setNegativeButton(R.string.reset_confirm_cancel, null)
+                .setPositiveButton(R.string.reset_confirm_ok,
+                        (dialog, which) -> resetToDefaults())
+                .show();
+    }
+
+    private void resetToDefaults() {
+        if (mResetInFlight) {
+            return;
+        }
+        Preference reset = findPreference(PREF_RESET);
+        if (reset == null) {
+            return;
+        }
+        mResetInFlight = true;
+        reset.setEnabled(false);
+        // 返回值只表示是否排入后台队列；真实结果（含 remote 不可用）统一走回调。
+        mStore.resetToDefaults(this::onResetResult);
+    }
+
+    /** ConfigStore 已在主线程回调；再 post 一次兼容后台线程回调，保证只改 UI 线程。 */
+    private void onResetResult(boolean success) {
+        MAIN.post(() -> {
+            // 先清除在途状态：view 已销毁时也要允许下次重建后再次操作。
+            mResetInFlight = false;
+            if (!isAdded() || getView() == null) {
+                return;
+            }
+            Preference reset = findPreference(PREF_RESET);
+            if (reset != null) {
+                reset.setEnabled(true);
+            }
+            Toast.makeText(requireContext(),
+                    success ? R.string.reset_done : R.string.reset_failed,
+                    Toast.LENGTH_SHORT).show();
+            if (success) {
+                // 整体重置后旧开关的确认值/回滚基线不再可信；清空后由刷新重建。
+                mWriteGate.clear();
+                // 绕过 refresh 的 1 秒节流，否则重置后开关可能仍显示旧值。
+                mHasRefreshed = false;
+                refresh();
+            }
+        });
     }
 
     /** 重新读取框架状态与开关值。service 绑定后由 MainActivity 调一次。 */

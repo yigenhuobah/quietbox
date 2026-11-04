@@ -26,6 +26,7 @@ import javax.xml.parsers.DocumentBuilderFactory;
  * 非功能 key 白名单说明（按当前 prefs.xml 实际内容）：
  * - status / warning：设置页顶部状态卡与警告横幅，由 StatusProvider 动态填充；
  * - p1_9_strip_xsec_token：PV-03 的子选项，不是独立 Feature；
+ * - reset_defaults：「恢复默认」操作入口，不是开关；
  * - footer：页脚说明。
  * 以后新增非功能 key 必须同步这里，否则测试失败——这是故意的。
  *
@@ -40,6 +41,7 @@ public class PrefsFeatureConsistencyTest {
             "status",
             "warning",
             Config.KEY_STRIP_XSEC_TOKEN,
+            "reset_defaults",
             "footer"));
 
     private static final Pattern NON_FEATURE_PREFIX = Pattern.compile("^(page|footer)_");

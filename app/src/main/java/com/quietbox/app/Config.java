@@ -4,7 +4,6 @@ import android.content.SharedPreferences;
 import android.util.Log;
 
 import java.util.EnumMap;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -27,11 +26,18 @@ public final class Config {
     /** AB 覆盖表：每行 key=value，由「实验」页写入，目标进程每 3 秒重读。 */
     public static final String KEY_AB_OVERRIDES = "ab_overrides";
 
+    /** 配置结构版本：模块 App 每次写配置都带上，用于未来做迁移。 */
+    public static final String KEY_CONFIG_VERSION = "config_version";
+    public static final int CURRENT_CONFIG_VERSION = 1;
+    /** 存储里没有 config_version 时的读取默认值：与老版本配置等价。 */
+    public static final int DEFAULT_CONFIG_VERSION = 1;
+
     private static final String TAG = "QuietBox";
 
     private final Map<Feature, Boolean> mEnabled = new EnumMap<>(Feature.class);
     private final Map<String, String> mAbOverrides = new LinkedHashMap<>();
     private boolean mStripXsecToken = DEFAULT_STRIP_XSEC_TOKEN;
+    private int mConfigVersion = DEFAULT_CONFIG_VERSION;
 
     private Config() {
         for (Feature f : Feature.values()) {
@@ -79,6 +85,75 @@ public final class Config {
         return fromOverrides(overrides);
     }
 
+    /**
+     * 逐键读取接口：真实实现直接转发 SharedPreferences。类型不匹配时
+     * SharedPreferences.getBoolean 会抛 ClassCastException，正是这里要容忍的
+     * 单键损坏。
+     */
+    interface PrefSource {
+        boolean getBoolean(String key, boolean def) throws Throwable;
+
+        int getInt(String key, int def) throws Throwable;
+
+        String getString(String key, String def) throws Throwable;
+    }
+
+    /** 逐键失败的告警出口；Android 侧转给 XposedModule.log。 */
+    @FunctionalInterface
+    interface WarnLogger {
+        void warn(String message, Throwable t);
+    }
+
+    /**
+     * 容错读取：每个功能开关、strip 子开关、AB 覆盖表、配置版本各自独立 try/catch，
+     * 单个键损坏只回退该键的默认值并告警，绝不丢弃已经成功读到的其它键。
+     *
+     * <p>纯 JVM 可测：不引用任何 Android 类型，供 Android 版 load 与单测共用。
+     */
+    static Config loadTolerant(PrefSource source, WarnLogger logger) {
+        Config config = new Config();
+        for (Feature f : Feature.values()) {
+            try {
+                config.mEnabled.put(f, source.getBoolean(f.key, f.defaultEnabled));
+            } catch (Throwable t) {
+                warnKey(logger, f.key, t);
+            }
+        }
+        try {
+            config.mStripXsecToken =
+                    source.getBoolean(KEY_STRIP_XSEC_TOKEN, DEFAULT_STRIP_XSEC_TOKEN);
+        } catch (Throwable t) {
+            warnKey(logger, KEY_STRIP_XSEC_TOKEN, t);
+        }
+        try {
+            parseOverrides(source.getString(KEY_AB_OVERRIDES, ""), config.mAbOverrides);
+        } catch (Throwable t) {
+            warnKey(logger, KEY_AB_OVERRIDES, t);
+        }
+        try {
+            int stored = source.getInt(KEY_CONFIG_VERSION, DEFAULT_CONFIG_VERSION);
+            config.mConfigVersion = stored;
+            if (stored > CURRENT_CONFIG_VERSION && logger != null) {
+                logger.warn("配置版本 v" + stored + " 高于模块支持 v"
+                        + CURRENT_CONFIG_VERSION + "，按兼容模式继续", null);
+            }
+        } catch (Throwable t) {
+            warnKey(logger, KEY_CONFIG_VERSION, t);
+        }
+        return config;
+    }
+
+    private static void warnKey(WarnLogger logger, String key, Throwable t) {
+        if (logger == null) {
+            return;
+        }
+        String detail = t.getClass().getName();
+        if (t.getMessage() != null) {
+            detail += ": " + t.getMessage();
+        }
+        logger.warn("config key read failed: " + key + " (" + detail + ")，已使用默认值", t);
+    }
+
     public static Config load(XposedModule module) {
         boolean remote;
         try {
@@ -91,24 +166,33 @@ public final class Config {
             module.log(Log.WARN, TAG, "no PROP_CAP_REMOTE: use built-in defaults");
             return new Config();
         }
+        final SharedPreferences sp;
         try {
-            SharedPreferences sp = module.getRemotePreferences(GROUP);
+            sp = module.getRemotePreferences(GROUP);
             if (sp == null) {
                 throw new IllegalStateException("remote prefs is null");
             }
-            Map<String, Boolean> overrides = new HashMap<>();
-            for (Feature f : Feature.values()) {
-                overrides.put(f.key, sp.getBoolean(f.key, f.defaultEnabled));
-            }
-            Config config = fromOverrides(overrides);
-            config.mStripXsecToken =
-                    sp.getBoolean(KEY_STRIP_XSEC_TOKEN, DEFAULT_STRIP_XSEC_TOKEN);
-            parseOverrides(sp.getString(KEY_AB_OVERRIDES, ""), config.mAbOverrides);
-            return config;
         } catch (Throwable t) {
+            // 连存储对象都拿不到，没有任何键可读：整体回退默认值。
             module.log(Log.WARN, TAG, "remote prefs unavailable: use built-in defaults", t);
             return new Config();
         }
+        return loadTolerant(new PrefSource() {
+            @Override
+            public boolean getBoolean(String key, boolean def) {
+                return sp.getBoolean(key, def);
+            }
+
+            @Override
+            public int getInt(String key, int def) {
+                return sp.getInt(key, def);
+            }
+
+            @Override
+            public String getString(String key, String def) {
+                return sp.getString(key, def);
+            }
+        }, (message, t) -> module.log(Log.WARN, TAG, message, t));
     }
 
     public boolean enabled(Feature f) {
@@ -126,6 +210,11 @@ public final class Config {
 
     public boolean stripXsecToken() {
         return mStripXsecToken;
+    }
+
+    /** 存储里读到的配置版本；缺键或读取失败时为 {@link #DEFAULT_CONFIG_VERSION}。 */
+    public int configVersion() {
+        return mConfigVersion;
     }
 
     public Map<String, String> abOverrides() {

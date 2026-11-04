@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 纯 JVM 的 SharedPreferences 替身：只实现 ConfigStore/AbConfigStore/StatusProvider
@@ -13,10 +14,26 @@ import java.util.Set;
  */
 final class FakeSharedPreferences implements SharedPreferences {
 
-    private final Map<String, Object> mValues = new HashMap<>();
+    private final Map<String, Object> mValues;
+    private final AtomicInteger mCommitCount = new AtomicInteger();
     private boolean mCommitResult = true;
     private boolean mThrowOnCommit;
     private boolean mThrowOnRead;
+    /** commit 成功但丢弃 remove：模拟「删除没真正落盘」。 */
+    private boolean mDropRemovals;
+
+    FakeSharedPreferences() {
+        this(new HashMap<>());
+    }
+
+    /** 多个 handle 共享同一份底层数据：用于模拟「重新取一份 prefs 句柄」。 */
+    FakeSharedPreferences(Map<String, Object> sharedValues) {
+        mValues = sharedValues;
+    }
+
+    int commitCount() {
+        return mCommitCount.get();
+    }
 
     void setCommitResult(boolean result) {
         mCommitResult = result;
@@ -28,6 +45,10 @@ final class FakeSharedPreferences implements SharedPreferences {
 
     void setThrowOnRead(boolean throwOnRead) {
         mThrowOnRead = throwOnRead;
+    }
+
+    void setDropRemovals(boolean dropRemovals) {
+        mDropRemovals = dropRemovals;
     }
 
     Map<String, Object> values() {
@@ -158,6 +179,7 @@ final class FakeSharedPreferences implements SharedPreferences {
 
         @Override
         public boolean commit() {
+            mCommitCount.incrementAndGet();
             if (mThrowOnCommit) {
                 throw new IllegalStateException("commit boom");
             }
@@ -180,8 +202,10 @@ final class FakeSharedPreferences implements SharedPreferences {
             if (mClear) {
                 mValues.clear();
             }
-            for (String key : mRemoved) {
-                mValues.remove(key);
+            if (!mDropRemovals) {
+                for (String key : mRemoved) {
+                    mValues.remove(key);
+                }
             }
             mValues.putAll(mPending);
         }

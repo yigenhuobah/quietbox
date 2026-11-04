@@ -26,8 +26,8 @@ android {
         applicationId "io.github.yigenhuobah.quietbox"
         minSdk 29
         targetSdk 36
-        versionCode 19
-        versionName "0.9.5"
+        versionCode 20
+        versionName "0.9.6"
     }
 
     testOptions {
@@ -108,6 +108,8 @@ dependencies {
     implementation 'androidx.preference:preference:1.2.1'
 
     testImplementation 'junit:junit:4.13.2'
+    // android.jar 里的 org.json 是桩实现；AnchorTable.load 的单测需要真实解析。
+    testImplementation 'org.json:json:20240303'
     testImplementation 'io.github.yigenhuobah:core-test:0.1.0'
     // Config 的公开方法签名引用 XposedModule；主源码 compileOnly 在单测运行期不可见，
     // 这里补同一坐标（不新增新库）。
