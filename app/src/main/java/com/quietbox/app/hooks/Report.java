@@ -10,6 +10,9 @@ import com.quietbox.app.HookState;
 import com.quietbox.app.ReportProtocol;
 import com.quietbox.app.StatusProvider;
 
+import io.github.yigenhuobah.core.CrashFlush;
+import io.github.yigenhuobah.core.Logger;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +43,19 @@ final class Report {
 
     private static final String TAG = "QuietBox";
     private static final int MAX_VALUE = 256;
+
+    /**
+     * 崩溃 flush 的 core 日志适配器：core 的等级常量与 android.util.Log 一致，
+     * 直接把等级/标签/正文转给 Log.println；有异常时附上堆栈文本。
+     * 日志自身抛出的异常由 core 的 CrashFlush 吞掉，不能影响崩溃路径。
+     */
+    private static final Logger CRASH_LOGGER = (level, tag, message, t) -> {
+        if (t == null) {
+            Log.println(level, tag, message);
+        } else {
+            Log.println(level, tag, message + '\n' + Log.getStackTraceString(t));
+        }
+    };
 
     /**
      * 本次目标进程会话标识："s<millis>-<8位hex>"。毫秒只作参考，唯一性由进程随机
@@ -118,9 +134,10 @@ final class Report {
      * 包装 Thread.setDefaultUncaughtExceptionHandler 记录目标进程最近崩溃。
      *
      * 幂等（{@link #sCrashHandlerInstalled} 保证只包一次）；previous 先保存，自定义
-     * handler 内先写崩溃再透传 previous（非空时），全程 try/catch：绝不因我们抛异常、
-     * 绝不改变目标 App 原有的异常处理行为。仅主进程调用；调用点在 Hooks.installAll
-     * 读取配置之后、功能开关判断之前——全部功能关闭时也要捕获崩溃。
+     * handler 内先写崩溃、再用 {@link CrashFlush} 同步 flush（最多 200ms），最后透传
+     * previous（非空时）；全程 try/catch：绝不因我们抛异常、绝不改变目标 App 原有的
+     * 异常处理行为。仅主进程调用；调用点在 Hooks.installAll 读取配置之后、功能开关
+     * 判断之前——全部功能关闭时也要捕获崩溃。
      */
     static synchronized void installCrashHandler() {
         if (sCrashHandlerInstalled) {
@@ -132,6 +149,13 @@ final class Report {
         Thread.setDefaultUncaughtExceptionHandler((thread, throwable) -> {
             try {
                 recordCrash(thread, throwable);
+            } catch (Throwable ignored) {
+            }
+            // 崩溃路径：同步 flush 一次，最多等 200ms；runBestEffort 内部吞掉任务异常，
+            // 超时/异常以 WARN 写入 CRASH_LOGGER，外层再兜一层，确保绝不影响 previous
+            // 的异常处理链。
+            try {
+                CrashFlush.runBestEffort(() -> Report.flushNow(), 200, CRASH_LOGGER, TAG);
             } catch (Throwable ignored) {
             }
             if (previous != null) {
@@ -201,14 +225,7 @@ final class Report {
         if (context == null) {
             return;
         }
-        List<String> keys = new ArrayList<>(batch.keySet());
-        List<String> values = new ArrayList<>();
-        for (String key : keys) {
-            values.add(batch.get(key));
-        }
-        Bundle extras = new Bundle();
-        extras.putStringArray("keys", keys.toArray(new String[0]));
-        extras.putStringArray("values", values.toArray(new String[0]));
+        Bundle extras = extrasOf(batch);
         Bundle result = callProvider(context, extras);
         if (result != null) {
             sLast = content;
@@ -221,6 +238,44 @@ final class Report {
         if (sErrors++ < 3) {
             Log.w(TAG, "status provider unavailable");
         }
+    }
+
+    /**
+     * 崩溃路径的同步 flush：不经过节流/心跳/退避，也不使用后台调用池，直接
+     * 同步调用 provider，并要求 provider 用 commit() 落盘（{@link StatusProvider#EXTRA_SYNC}）。
+     * 任何异常都吞掉——UEH 里只允许记录失败，绝不允许影响宿主原有的崩溃处理。
+     */
+    static void flushNow() {
+        try {
+            Map<String, String> batch = snapshot();
+            Context context = context();
+            if (context == null) {
+                return;
+            }
+            Bundle extras = extrasOf(batch);
+            extras.putBoolean(StatusProvider.EXTRA_SYNC, true);
+            Uri uri = Uri.parse("content://" + StatusProvider.AUTHORITY);
+            Bundle result = context.getContentResolver().call(uri, "report", null, extras);
+            if (result != null) {
+                sLast = contentOf(batch);
+                sLastOk = System.currentTimeMillis();
+            }
+        } catch (Throwable ignored) {
+            // 崩溃路径 fail-safe：不向外抛任何异常。
+        }
+    }
+
+    /** 把快照打平为 provider 需要的 keys/values 两个数组。 */
+    private static Bundle extrasOf(Map<String, String> batch) {
+        List<String> keys = new ArrayList<>(batch.keySet());
+        List<String> values = new ArrayList<>();
+        for (String key : keys) {
+            values.add(batch.get(key));
+        }
+        Bundle extras = new Bundle();
+        extras.putStringArray("keys", keys.toArray(new String[0]));
+        extras.putStringArray("values", values.toArray(new String[0]));
+        return extras;
     }
 
     /**

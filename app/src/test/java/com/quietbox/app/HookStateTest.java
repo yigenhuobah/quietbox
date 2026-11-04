@@ -187,6 +187,25 @@ public class HookStateTest {
     }
 
     /**
+     * core 账本按挂载点撤销失败：同一挂载点先失败、后安装成功时，旧 skip/critical
+     * 必须被清掉，诊断页不能同时出现 installed 与 failed。
+     */
+    @Test
+    public void installedOnSameMountClearsEarlierFailure() {
+        Feature f = Feature.SHAKE_JUMP_DISABLE;
+        HookState.clearFailures(f);
+
+        HookState.markNotFound(f, "hook:retry-mount");
+        assertEquals("hook:retry-mount", HookState.skipReason(f));
+
+        HookState.installed(f, "retry-mount");
+
+        assertNull("同一挂载点安装成功后必须撤销旧 skip", HookState.skipReason(f));
+        assertFalse("critical 标记也必须一并撤销", HookState.hasCriticalSkip(f));
+        assertTrue("已安装 label 仍要保留", HookState.labels(f).contains("retry-mount"));
+    }
+
+    /**
      * PV-02 未被本文件其他用例、ReportTest、HookDiagnosisTest 触碰：HookState 是
      * 进程级静态状态，只有用未被污染的 Feature 做快照前后对比，统计断言才不会
      * 恰好被其他用例的残留状态兜底。断言用精确增量而非 >=1。

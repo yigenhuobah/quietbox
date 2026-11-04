@@ -176,9 +176,8 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                     Toast.LENGTH_SHORT).show();
             Preference p = findPreference(key);
             if (p instanceof MaterialSwitchPreference) {
-                Boolean confirmed = mWriteGate.rollback(key);
-                ((MaterialSwitchPreference) p).setCheckedValue(
-                        confirmed != null ? confirmed : !requested);
+                boolean confirmed = mWriteGate.rollback(key, !requested);
+                ((MaterialSwitchPreference) p).setCheckedValue(confirmed);
             }
         });
     }

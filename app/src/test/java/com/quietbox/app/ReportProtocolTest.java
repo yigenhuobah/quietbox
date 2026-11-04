@@ -15,6 +15,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 
+import io.github.yigenhuobah.core.ReportProtocolCore;
+
 /**
  * StatusProvider 的纯 Java 协议规则：键白名单、值长度、hit 最大值合并、
  * critical skip 判定、会话新旧比较与 TTL 新鲜度。
@@ -58,6 +60,15 @@ public class ReportProtocolTest {
         assertFalse(ReportProtocol.validKey("crash"));
     }
 
+    /** 模块适配器必须把 core 配置为 QuietBox 的平铺崩溃键布局（crash0/1/2）。 */
+    @Test
+    public void protocolConfiguredWithFlatCrashKeys() {
+        assertEquals("crash0", ReportProtocolCore.crashKey(0));
+        assertEquals("crash1", ReportProtocolCore.crashKey(1));
+        assertEquals("crash2", ReportProtocolCore.crashKey(2));
+        assertNull("平铺布局只有 3 个槽位", ReportProtocolCore.crashKey(3));
+    }
+
     /** crash 回传键：固定键名白名单放行，单条值仍受 MAX_VALUE=256 上限（生产端截 240）。 */
     @Test
     public void crashKeysAreWhitelistedAndValueCapped() {
@@ -78,6 +89,20 @@ public class ReportProtocolTest {
         assertFalse(ReportProtocol.validKey(""));
         assertFalse(ReportProtocol.validKey("REG.p0_1_splash_ad_skip"));
         assertFalse(ReportProtocol.validKey("reg.p0_1_splash_ad_skip "));
+    }
+
+    /**
+     * Stage 2 low #4 回归：QuietBox 的旧白名单从不放行 {@code err.*}
+     * （它没有 hook 体错误计数通道）。core 的前缀生成式会额外注册 err 键，
+     * 适配器必须使用精确白名单重载，保持跨进程写入面与旧实现一致。
+     */
+    @Test
+    public void validKeyRejectsErrPrefixKeys() {
+        for (Feature f : Feature.values()) {
+            assertFalse("err 键不得进入 QuietBox 白名单：" + f.key,
+                    ReportProtocol.validKey(ReportProtocolCore.PREFIX_ERR + f.key));
+        }
+        assertFalse(ReportProtocol.validKey("err."));
     }
 
     @Test

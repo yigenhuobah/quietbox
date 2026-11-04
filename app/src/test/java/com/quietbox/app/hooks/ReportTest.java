@@ -216,6 +216,15 @@ public class ReportTest {
     }
 
     /**
+     * 崩溃路径的同步 flush 在没有 provider/Context 的 JVM 环境里必须静默返回：
+     * UEH 调用它时不允许任何异常逃逸。
+     */
+    @Test
+    public void flushNowIsFailSafeWithoutProviderContext() {
+        Report.flushNow();
+    }
+
+    /**
      * UEH 包装：幂等（static boolean 只包一次）、先记录崩溃再透传 previous；
      * previous 的异常处理行为不被改变（透传后原样交回）。
      */

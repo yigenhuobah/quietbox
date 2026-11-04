@@ -50,6 +50,12 @@ public final class StatusProvider extends ContentProvider {
     /** 落盘时统一加 "v:" 前缀，避免与其他本地键冲突。 */
     private static final String VALUE_PREFIX = "v:";
 
+    /**
+     * 同步落盘标记：崩溃路径的 flush 要求 provider 用 commit() 而不是 apply()，
+     * 确保调用返回时数据已经写入。普通心跳回传不设置，继续用 apply()。
+     */
+    public static final String EXTRA_SYNC = "sync";
+
     /** 唯一允许写入诊断数据的宿主包名。 */
     private static final String TARGET_PACKAGE = "com.xingin.xhs";
 
@@ -77,18 +83,25 @@ public final class StatusProvider extends ContentProvider {
             return null;
         }
         return applyReport(context.getSharedPreferences(PREFS, 0),
-                extras.getStringArray("keys"), extras.getStringArray("values"));
+                extras.getStringArray("keys"), extras.getStringArray("values"),
+                extras.getBoolean(EXTRA_SYNC, false));
     }
 
     /**
      * call() 的落盘核心：数组校验、会话判定、新会话清库与逐键合并写入。
-     * 不触碰 Binder / PackageManager / Bundle，配合 FakeSharedPreferences 可在纯 JVM
-     * 单测直接执行（见 StatusProviderTest）；call() 只剩 Context / Binder 胶水。
+     * 普通回传用 apply()（异步落盘）；sync=true 时用 commit()，供崩溃路径在
+     * 返回前确认落盘。不触碰 Binder / PackageManager / Bundle，配合
+     * FakeSharedPreferences 可在纯 JVM 单测直接执行（见 StatusProviderTest）。
      * 串行由 call() 的 synchronized 保证，本方法不再加锁。
      *
-     * @return 与 call() 相同的语义：接受时返回空 Bundle，批次非法时返回 null
+     * @return 与 call() 相同的语义：接受时返回空 Bundle，批次非法时返回 null；
+     *         sync=true 且 commit 失败时也返回 null
      */
     static Bundle applyReport(SharedPreferences sp, String[] keys, String[] values) {
+        return applyReport(sp, keys, values, false);
+    }
+
+    static Bundle applyReport(SharedPreferences sp, String[] keys, String[] values, boolean sync) {
         if (keys == null || values == null || keys.length != values.length) {
             return null;
         }
@@ -156,7 +169,14 @@ public final class StatusProvider extends ContentProvider {
             accepted++;
         }
         if (accepted > 0) {
-            editor.apply();
+            if (sync) {
+                // 崩溃路径：调用返回前必须确认落盘；commit 失败按整批失败处理。
+                if (!editor.commit()) {
+                    return null;
+                }
+            } else {
+                editor.apply();
+            }
         }
         return new Bundle();
     }

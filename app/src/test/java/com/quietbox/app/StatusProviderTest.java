@@ -238,4 +238,25 @@ public class StatusProviderTest {
         assertEquals(2L, sp.getLong(
                 "v:" + StatusProvider.PREFIX_HIT + Feature.FEED_GOODS_CARD_BLOCK.key, 0L));
     }
+
+    /**
+     * 崩溃路径的同步回传：sync=true 必须走 commit()，且在 commit 返回前不报告成功。
+     * commit 失败时整批返回 null，让 Report 把它当作 provider 不可达处理。
+     */
+    @Test
+    public void syncReportRequiresCommitSuccess() {
+        FakeSharedPreferences sp = new FakeSharedPreferences();
+        sp.setCommitResult(false);
+
+        assertNull("commit 失败时同步回传必须报告失败",
+                StatusProvider.applyReport(sp, new String[]{REG}, new String[]{"ExploreView#g0"},
+                        true));
+        assertFalse("commit 失败不能把新值留在存储里", sp.contains(v(REG)));
+
+        sp.setCommitResult(true);
+        assertNotNull("commit 成功时同步回传正常返回",
+                StatusProvider.applyReport(sp, new String[]{REG}, new String[]{"ExploreView#g0"},
+                        true));
+        assertEquals("ExploreView#g0", sp.getString(v(REG), null));
+    }
 }

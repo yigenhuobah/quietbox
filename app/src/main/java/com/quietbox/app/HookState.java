@@ -4,93 +4,36 @@ import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.Map;
+
+import io.github.yigenhuobah.core.HookStateCore;
 
 /**
- * 目标进程内的诊断状态：每个功能的注册标签、命中次数、跳过原因。
+ * 目标进程内的诊断状态适配器：账本、skip 去重/容量、critical 标记、命中计数
+ * 全部由 core 的 {@link HookStateCore} 实现；本类保留原有静态 API，并负责
+ * 模块专属的 {@link Feature} ↔ 稳定 key 映射与日志。
  *
  * 真正带细节的日志由 HookKit 打进 logcat（tag QuietBox）；这里只存计数快照，
  * 由 hooks 包的 Report 定期回传给模块 App 的 StatusProvider，供诊断页展示。
- *
- * 线程安全：命中可能来自任意线程（含 binder 线程），全部用并发容器。
  */
 public final class HookState {
 
     private static final String TAG = "QuietBox";
 
-    private static final ConcurrentMap<Feature, State> STATES = new ConcurrentHashMap<>();
+    private static final HookStateCore CORE = new HookStateCore();
 
-    /**
-     * 单个功能最多保留的 skip 原因数。超出后优先丢最旧的非 critical 原因；
-     * 若剩下的原因全是 critical，则丢次旧项，始终保留首条与最新一条。
-     */
-    private static final int MAX_SKIP_REASONS = 32;
+    /** Feature.key → Feature；Report/HookState 的账本以稳定字符串 key 为索引。 */
+    private static final Map<String, Feature> BY_KEY = new HashMap<>();
+
+    static {
+        for (Feature f : Feature.values()) {
+            BY_KEY.put(f.key, f);
+        }
+    }
 
     private HookState() {
-    }
-
-    private static final class State {
-        final Set<String> labels = ConcurrentHashMap.newKeySet();
-        final Set<String> criticalSkips = ConcurrentHashMap.newKeySet();
-        final AtomicLong hits = new AtomicLong();
-        /**
-         * 去重后的 skip 原因，按首次出现顺序排列；最后一条与 {@link #skip} 相同。
-         * 锁 reasons 本身：hooker 线程追加、诊断线程遍历。
-         */
-        final List<String> reasons = new ArrayList<>();
-        /** 兼容旧字段：最后一条原因。 */
-        volatile String skip;
-
-        void markSkip(String reason) {
-            if (reason == null || reason.isEmpty()) {
-                return;
-            }
-            synchronized (reasons) {
-                if (reasons.contains(reason)) {
-                    return;
-                }
-                if (reasons.size() >= MAX_SKIP_REASONS) {
-                    evictOldestReason();
-                }
-                reasons.add(reason);
-                skip = reason;
-            }
-        }
-
-        /**
-         * 容量已满时丢弃一条旧原因：优先丢首条之后最旧的非 critical 原因；
-         * 若剩下的全是 critical（没有可丢的可选项），则丢次旧项（下标 1）。
-         *
-         * 首条原因始终保留，作为「首个 critical」的展示锚点，因此即使所有原因
-         * 都是 critical，列表也不会超过 {@link #MAX_SKIP_REASONS}。
-         * 被丢弃原因若曾标过 critical，其标记仍留在 criticalSkips 中，
-         * hasCriticalSkip 的「本会话出现过主锚点缺失」语义不受影响。
-         */
-        private void evictOldestReason() {
-            for (int i = 1; i < reasons.size(); i++) {
-                if (!criticalSkips.contains(reasons.get(i))) {
-                    reasons.remove(i);
-                    return;
-                }
-            }
-            reasons.remove(1);
-        }
-    }
-
-    private static State state(Feature f) {
-        State s = STATES.get(f);
-        if (s == null) {
-            s = new State();
-            State prev = STATES.putIfAbsent(f, s);
-            if (prev != null) {
-                s = prev;
-            }
-        }
-        return s;
     }
 
     /**
@@ -98,12 +41,12 @@ public final class HookState {
      * 也会进入快照并发送空 reg/skip，从而清掉上一会话的旧 skip。
      */
     public static void enable(Feature f) {
-        state(f);
+        CORE.enable(f.key);
         Log.i(TAG, f.id + " enabled");
     }
 
     public static void installed(Feature f, String label) {
-        state(f).labels.add(label);
+        CORE.installed(f.key, label);
     }
 
     /**
@@ -112,7 +55,7 @@ public final class HookState {
      * {@link #skipReason} 仍返回最后一条以兼容旧展示。
      */
     public static void markNotFound(Feature f, String reason) {
-        state(f).markSkip(reason);
+        CORE.markNotFound(f.key, reason);
     }
 
     /**
@@ -120,26 +63,22 @@ public final class HookState {
      * 让 ReportProtocol.featureFailed 把该功能计入失败横幅。
      */
     public static void markNotFoundCritical(Feature f, String reason) {
-        State s = state(f);
-        s.markSkip(reason);
-        if (reason != null) {
-            s.criticalSkips.add(reason);
-        }
+        CORE.markNotFoundCritical(f.key, reason);
     }
 
     /** 本会话是否出现过主锚点缺失。 */
     public static boolean hasCriticalSkip(Feature f) {
-        State s = STATES.get(f);
-        return s != null && !s.criticalSkips.isEmpty();
+        return CORE.hasCriticalSkip(f.key);
     }
 
     /** 命中计数 +1，返回累加后的次数。 */
     public static long hit(Feature f) {
-        return state(f).hits.incrementAndGet();
+        return CORE.hit(f.key);
     }
 
     /** 安装阶段的补充说明：只写日志，不进入诊断页。 */
     public static void note(Feature f, String text) {
+        CORE.note(f.key, text);
         if (text != null) {
             Log.i(TAG, f.id + " " + text);
         }
@@ -148,27 +87,26 @@ public final class HookState {
     // ---- 快照（供 Report / 挂载统计回传） ----
 
     public static List<Feature> touched() {
-        return new ArrayList<>(STATES.keySet());
-    }
-
-    public static List<String> labels(Feature f) {
-        State s = STATES.get(f);
-        if (s == null) {
-            return Collections.emptyList();
+        List<Feature> out = new ArrayList<>();
+        for (String key : CORE.touched()) {
+            Feature f = BY_KEY.get(key);
+            if (f != null) {
+                out.add(f);
+            }
         }
-        List<String> out = new ArrayList<>(s.labels);
-        Collections.sort(out);
         return out;
     }
 
+    public static List<String> labels(Feature f) {
+        return CORE.labels(f.key);
+    }
+
     public static long hitCount(Feature f) {
-        State s = STATES.get(f);
-        return s == null ? 0L : s.hits.get();
+        return CORE.hits(f.key);
     }
 
     public static String skipReason(Feature f) {
-        State s = STATES.get(f);
-        return s == null ? null : s.skip;
+        return CORE.skipReason(f.key);
     }
 
     /**
@@ -178,13 +116,7 @@ public final class HookState {
      * 可选锚点缺失，诊断页与上报就只剩后者。这里保留完整列表供诊断展示。
      */
     public static List<String> skipReasons(Feature f) {
-        State s = STATES.get(f);
-        if (s == null) {
-            return Collections.emptyList();
-        }
-        synchronized (s.reasons) {
-            return new ArrayList<>(s.reasons);
-        }
+        return CORE.skipReasons(f.key);
     }
 
     /**
@@ -193,29 +125,7 @@ public final class HookState {
      * 回传里消失，同时仍能带出最新的可选失败。
      */
     public static String skipSummary(Feature f) {
-        State s = STATES.get(f);
-        if (s == null) {
-            return null;
-        }
-        List<String> reasons;
-        synchronized (s.reasons) {
-            reasons = new ArrayList<>(s.reasons);
-        }
-        if (reasons.isEmpty()) {
-            return null;
-        }
-        String last = reasons.get(reasons.size() - 1);
-        String firstCritical = null;
-        for (String r : reasons) {
-            if (s.criticalSkips.contains(r)) {
-                firstCritical = r;
-                break;
-            }
-        }
-        if (firstCritical == null || firstCritical.equals(last)) {
-            return last;
-        }
-        return firstCritical + " | " + last;
+        return CORE.skipSummary(f.key);
     }
 
     /**
@@ -226,20 +136,12 @@ public final class HookState {
      * 与旧 skip，诊断页和失败横幅会把已挂载的功能判成整体失效。
      */
     public static void clearFailures(Feature f) {
-        State s = STATES.get(f);
-        if (s == null) {
-            return;
-        }
-        s.criticalSkips.clear();
-        synchronized (s.reasons) {
-            s.reasons.clear();
-            s.skip = null;
-        }
+        CORE.clearFailures(f.key);
     }
 
     /**
      * 挂载统计快照。计数按「功能」去重：
-     * ok = 至少注册成功一个挂载点的功能数，miss/bad = 有 skip 的功能数。
+     * ok = 至少注册成功一个挂载点的功能数，miss/bad = 有失败记录的功能数。
      */
     public static final class Snapshot {
         public final int ok;
@@ -258,24 +160,13 @@ public final class HookState {
     }
 
     public static Snapshot snapshot() {
-        int ok = 0;
-        int bad = 0;
-        List<String> missed = new ArrayList<>();
-        synchronized (STATES) {
-            for (Feature f : STATES.keySet()) {
-                boolean hasLabel = !labels(f).isEmpty();
-                boolean hasSkip = !skipReasons(f).isEmpty();
-                if (hasLabel) {
-                    ok++;
-                }
-                if (hasSkip) {
-                    bad++;
-                    missed.add(f.id);
-                }
-            }
-            Collections.sort(missed);
-            return new Snapshot(ok, bad, missed, STATES.size(), bad);
+        HookStateCore.Snapshot core = CORE.snapshot();
+        List<String> missed = new ArrayList<>(core.missed.size());
+        for (String key : core.missed) {
+            Feature f = BY_KEY.get(key);
+            missed.add(f != null ? f.id : key);
         }
+        Collections.sort(missed);
+        return new Snapshot(core.ok, core.miss, missed, core.features, core.bad);
     }
-
 }

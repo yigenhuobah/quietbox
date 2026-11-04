@@ -2,7 +2,6 @@ package com.quietbox.app;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
@@ -26,12 +25,13 @@ public class WriteGateTest {
 
         assertFalse("旧写入已被更新的写入取代，不能改 UI",
                 gate.onResult("k", first, true, true));
-        assertEquals("但它确实落盘了，必须记入确认值", Boolean.TRUE, gate.rollback("k"));
+        assertEquals("但它确实落盘了，必须记入确认值", Boolean.TRUE,
+                gate.rollback("k", false));
 
         assertTrue("最新一次写入的结果仍要应用",
                 gate.onResult("k", second, false, false));
         assertEquals("最新写入失败时回滚到最近确认值，而不是更旧的乐观值",
-                Boolean.TRUE, gate.rollback("k"));
+                Boolean.TRUE, gate.rollback("k", true));
     }
 
     @Test
@@ -44,7 +44,8 @@ public class WriteGateTest {
         assertTrue("最新写入的失败结果要应用到 UI",
                 gate.onResult("k", second, false, false));
 
-        assertEquals("回滚目标应是已确认落盘的 true", Boolean.TRUE, gate.rollback("k"));
+        assertEquals("回滚目标应是已确认落盘的 true", Boolean.TRUE,
+                gate.rollback("k", false));
     }
 
     @Test
@@ -58,7 +59,8 @@ public class WriteGateTest {
                 gate.onResult("k", first, false, false));
         assertTrue("最新写入的结果仍要应用",
                 gate.onResult("k", second, false, false));
-        assertEquals("回滚目标仍是最近确认落盘的 true", Boolean.TRUE, gate.rollback("k"));
+        assertEquals("回滚目标仍是最近确认落盘的 true", Boolean.TRUE,
+                gate.rollback("k", false));
     }
 
     @Test
@@ -67,7 +69,8 @@ public class WriteGateTest {
         long seq = gate.begin("k");
         assertTrue(gate.onResult("k", seq, false, true));
 
-        assertNull("从未成功落盘时没有确认值，由调用方兜底", gate.rollback("k"));
+        assertEquals("从未成功落盘时回到调用方兜底值，由调用方保证 UI 与上一次选择一致",
+                Boolean.TRUE, gate.rollback("k", true));
     }
 
     @Test
@@ -78,6 +81,7 @@ public class WriteGateTest {
 
         assertFalse("Fragment 销毁后在途结果不能再改界面",
                 gate.onResult("k", seq, false, true));
-        assertNull("确认值随 clear 一并丢弃", gate.rollback("k"));
+        assertEquals("确认值随 clear 一并丢弃，回到兜底值", Boolean.FALSE,
+                gate.rollback("k", false));
     }
 }
