@@ -4,6 +4,7 @@ import android.view.View;
 
 import com.quietbox.app.Feature;
 import com.quietbox.app.HookState;
+import com.quietbox.app.anchor.AnchorKeys;
 
 import java.lang.reflect.Method;
 
@@ -26,21 +27,17 @@ import io.github.libxposed.api.XposedModule;
  */
 final class NoteDetailAdHooks {
 
-    private static final String CLAZZ = "com.xingin.matrix.notedetail.asyncwidgets.advert.AdvertV2View";
-
     private NoteDetailAdHooks() {
     }
 
     static void install(XposedModule module, ClassLoader cl) {
         Feature f = Feature.NOTE_DETAIL_AD_BANNER;
         try {
-            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ, true);
-            if (cls == null) {
-                return;
-            }
-            // a(Lb20/b;) 绑图片广告模型；b(Lp50/v;) 绑视频广告模型。参数类型是混淆类，按名字+参数个数定位。
-            Method image = HookKit.findByNameAndArity(cls, "a", 1);
-            Method video = HookKit.findByNameAndArity(cls, "b", 1);
+            // a(Lb20/b;) 绑图片广告模型；b(Lp50/v;) 绑视频广告模型。
+            Method image = HookKit.findAnchorMethod(module, f, cl,
+                    AnchorKeys.NOTE_DETAIL_AD_IMAGE, true);
+            Method video = HookKit.findAnchorMethod(module, f, cl,
+                    AnchorKeys.NOTE_DETAIL_AD_VIDEO, true);
             HookKit.install(module, f, "AdvertV2View#a", image, hideHook(module, f, "image"));
             HookKit.install(module, f, "AdvertV2View#b", video, hideHook(module, f, "video"));
             HookState.note(f, "AdvertV2View 绑定广告数据时置 GONE 并跳过绑定");

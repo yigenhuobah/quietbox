@@ -6,6 +6,7 @@ import androidx.annotation.Nullable;
 
 import com.quietbox.app.Feature;
 import com.quietbox.app.HookState;
+import com.quietbox.app.anchor.AnchorTable;
 
 import java.lang.reflect.Method;
 
@@ -35,6 +36,58 @@ final class HookKit {
 
     static void error(XposedModule module, String msg, Throwable t) {
         module.log(Log.ERROR, TAG, msg, t);
+    }
+
+    /**
+     * 按 anchors.json 的逻辑键解析目标类。锚点表缺失/类缺失时 fail-open 返回 null；
+     * critical=true 记 critical（主链路），否则只记可选 skip（兜底/副挂点）。
+     */
+    @Nullable
+    static Class<?> findAnchorClass(XposedModule module, Feature f, ClassLoader cl,
+                                    String key, boolean critical) {
+        AnchorTable anchors = AnchorTable.get(cl);
+        Class<?> cls = anchors == null ? null : anchors.clazz(key);
+        if (cls == null) {
+            warn(module, f.id + " skip: anchor class not found " + key);
+            if (critical) {
+                HookState.markNotFoundCritical(f, "锚点类未找到 " + key);
+            } else {
+                HookState.markNotFound(f, "锚点类未找到 " + key);
+            }
+        }
+        return cls;
+    }
+
+    /**
+     * 按 anchors.json 的逻辑键解析目标方法（精确 JVM 签名）。
+     * 失败时 fail-open 返回 null；critical=true 记 critical，否则记可选 skip。
+     */
+    @Nullable
+    static Method findAnchorMethod(XposedModule module, Feature f, ClassLoader cl,
+                                   String key, boolean critical) {
+        AnchorTable anchors = AnchorTable.get(cl);
+        Method m = anchors == null ? null : anchors.method(key);
+        if (m == null) {
+            warn(module, f.id + " skip: anchor not found " + key);
+            if (critical) {
+                HookState.markNotFoundCritical(f, "锚点未找到 " + key);
+            } else {
+                HookState.markNotFound(f, "锚点未找到 " + key);
+            }
+        }
+        return m;
+    }
+
+    @Nullable
+    static Method findAnchorMethod(XposedModule module, Feature f, ClassLoader cl, String key) {
+        return findAnchorMethod(module, f, cl, key, false);
+    }
+
+    /** 可选锚点：解析失败不写 skip 记录，由调用方按业务语义决定是否记录。 */
+    @Nullable
+    static Method anchorMethod(ClassLoader cl, String key) {
+        AnchorTable anchors = AnchorTable.get(cl);
+        return anchors == null ? null : anchors.method(key);
     }
 
     /**

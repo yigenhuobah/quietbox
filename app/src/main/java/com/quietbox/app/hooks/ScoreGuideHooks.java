@@ -1,9 +1,9 @@
 package com.quietbox.app.hooks;
 
 import android.app.Activity;
-import android.os.Bundle;
 
 import com.quietbox.app.Feature;
+import com.quietbox.app.anchor.AnchorKeys;
 
 import java.lang.reflect.Method;
 
@@ -27,10 +27,6 @@ import io.github.libxposed.api.XposedModule;
  */
 final class ScoreGuideHooks {
 
-    private static final String DIALOG_CLAZZ =
-            "com.xingin.lurker.appscore.ui.AppScoreDialogActivity";
-    private static final String GP_REVIEW_METHOD = "tryLaunchGpReview";
-
     /** 宿主 de() 只在该 dialog_type 取值分支构造并 show() 评分弹窗。 */
     static final String SCORE_DIALOG_TYPE = "dialog_app_score";
 
@@ -40,14 +36,13 @@ final class ScoreGuideHooks {
     static void install(XposedModule module, ClassLoader cl) {
         Feature f = Feature.SCORE_GUIDE_BLOCK;
         try {
-            Class<?> dialog = HookKit.findClass(module, f, cl, DIALOG_CLAZZ, true);
-            Method onCreate = HookKit.findMethod(module, f, dialog, "onCreate", Bundle.class);
+            Method onCreate = HookKit.findAnchorMethod(module, f, cl,
+                    AnchorKeys.SCORE_DIALOG_ON_CREATE, true);
             HookKit.install(module, f, "onCreate", onCreate, onCreateHooker(module, f));
 
-            Class<?> app = HookKit.findClass(module, f, cl, "com.xingin.xhs.app.ShareApplication", true);
-            HookKit.install(module, f, GP_REVIEW_METHOD,
-                    HookKit.findMethod(module, f, app, GP_REVIEW_METHOD),
-                    HookKit.skipVoid(module, f, GP_REVIEW_METHOD));
+            HookKit.install(module, f, "tryLaunchGpReview",
+                    HookKit.findAnchorMethod(module, f, cl, AnchorKeys.SCORE_GP_REVIEW, true),
+                    HookKit.skipVoid(module, f, "tryLaunchGpReview"));
         } catch (Throwable t) {
             HookKit.error(module, f.id + " install aborted", t);
         }

@@ -1,6 +1,7 @@
 package com.quietbox.app.hooks;
 
 import com.quietbox.app.Feature;
+import com.quietbox.app.anchor.AnchorKeys;
 
 import java.lang.reflect.Method;
 
@@ -15,28 +16,27 @@ import io.github.libxposed.api.XposedModule;
  */
 final class ContentRatingHooks {
 
-    private static final String CLAZZ = "com.xingin.growth.snackbar.ContentRatingProxyImpl";
-    private static final String SHOULD_METHOD = "shouldShowInternal";
-
     private ContentRatingHooks() {
     }
 
     static void install(XposedModule module, ClassLoader cl) {
         Feature f = Feature.CONTENT_RATING_BLOCK;
         try {
-            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ, true);
-            Method should = HookKit.findMethod(module, f, cls, SHOULD_METHOD, String.class);
-            HookKit.install(module, f, SHOULD_METHOD, should,
-                    HookKit.constBool(module, f, SHOULD_METHOD, false));
+            Method should = HookKit.findAnchorMethod(module, f, cl,
+                    AnchorKeys.CONTENT_RATING_SHOULD_SHOW, true);
+            HookKit.install(module, f, "shouldShowInternal", should,
+                    HookKit.constBool(module, f, "shouldShowInternal", false));
             // 公开入口：showContentRatingSnackBarIfNeeded(Activity, IContentRatingProxy$b, int, int)V。
-            String entry = "showContentRatingSnackBarIfNeeded";
-            HookKit.install(module, f, entry,
-                    HookKit.findByNameAndArity(module, f, cls, entry, 4),
-                    HookKit.skipVoid(module, f, entry));
-            for (String name : new String[]{"showForVideo", "showForImageText"}) {
-                Method m = HookKit.findMethod(module, f, cls, name);
+            HookKit.install(module, f, "showContentRatingSnackBarIfNeeded",
+                    HookKit.findAnchorMethod(module, f, cl,
+                            AnchorKeys.CONTENT_RATING_SHOW_IF_NEEDED, false),
+                    HookKit.skipVoid(module, f, "showContentRatingSnackBarIfNeeded"));
+            for (String key : new String[]{
+                    AnchorKeys.CONTENT_RATING_SHOW_VIDEO,
+                    AnchorKeys.CONTENT_RATING_SHOW_IMAGE_TEXT}) {
+                Method m = HookKit.findAnchorMethod(module, f, cl, key, false);
                 if (m != null) {
-                    HookKit.install(module, f, name, m, HookKit.skipVoid(module, f, name));
+                    HookKit.install(module, f, key, m, HookKit.skipVoid(module, f, key));
                 }
             }
         } catch (Throwable t) {

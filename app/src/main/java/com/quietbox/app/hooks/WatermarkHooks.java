@@ -1,11 +1,10 @@
 package com.quietbox.app.hooks;
 
-import android.graphics.Bitmap;
-
 import androidx.annotation.Nullable;
 
 import com.quietbox.app.Feature;
 import com.quietbox.app.HookState;
+import com.quietbox.app.anchor.AnchorKeys;
 
 import java.lang.reflect.Method;
 import java.util.List;
@@ -44,19 +43,6 @@ import io.github.libxposed.api.XposedModule;
  */
 final class WatermarkHooks {
 
-    /**
-     * Canvas 合成点：a(Bitmap src, Bitmap watermark, Bitmap sticker, Bitmap ai,
-     * boolean disableWaterMark, boolean disableAiWaterMark) -> Bitmap。
-     * 9.52.0 为 jn6.j；9.51.0 为 ce8.j，9.50.0 为 nd8.j。
-     */
-    private static final String COMPOSE_CLAZZ = "jn6.j";
-
-    /** 保存入口：i(Activity, String×4, Z, F1, F1, Z, Z, Z) 共 11 参。9.52.0 为 jn6.i；9.51.0 为 ce8.i。 */
-    private static final String SAVE_CLAZZ = "jn6.i";
-
-    /** 语义 getter：MediaSaveConfig.c() -> disableWaterMark。 */
-    private static final String MODEL_CLAZZ = "com.xingin.entities.MediaSaveConfig";
-
     private WatermarkHooks() {
     }
 
@@ -69,13 +55,11 @@ final class WatermarkHooks {
 
         // 1) 主路径：Canvas 合成时把 disableWaterMark / disableAiWaterMark 置 true。
         try {
-            // 关键类：jn6.j 缺失即主水印链路失效，记 critical 进失败横幅。
-            Class<?> cls = HookKit.findClass(module, f, cl, COMPOSE_CLAZZ, true);
-            if (cls != null) {
-                Method m = HookKit.findMethodQuiet(module, f, cls, "a",
-                        Bitmap.class, Bitmap.class, Bitmap.class, Bitmap.class,
-                        boolean.class, boolean.class);
-                if (m != null && HookKit.install(module, f, "jn6.j#a(disableWaterMark=true)", m,
+            // 关键锚点：jn6.j#a 缺失即主水印链路失效，记 critical 进失败横幅。
+            Method m = HookKit.findAnchorMethod(module, f, cl,
+                    AnchorKeys.WATERMARK_COMPOSE, true);
+            if (m != null) {
+                if (HookKit.install(module, f, "jn6.j#a(disableWaterMark=true)", m,
                         chain -> {
                             Object[] replaced = null;
                             try {
@@ -109,13 +93,10 @@ final class WatermarkHooks {
 
         // 3) 语义 getter：让上层查询也认为"无水印"。可选锚点：缺失只记 skip，不标 critical。
         try {
-            Class<?> cls = HookKit.findClass(module, f, cl, MODEL_CLAZZ, false);
-            if (cls != null) {
-                Method m = HookKit.findMethodQuiet(module, f, cls, "c");
-                if (m != null && HookKit.install(module, f, "MediaSaveConfig#c(no-watermark)", m,
-                        HookKit.constBool(module, f, "MediaSaveConfig#c", true))) {
-                    installed++;
-                }
+            Method m = HookKit.anchorMethod(cl, AnchorKeys.WATERMARK_MODEL_GETTER);
+            if (m != null && HookKit.install(module, f, "MediaSaveConfig#c(no-watermark)", m,
+                    HookKit.constBool(module, f, "MediaSaveConfig#c", true))) {
+                installed++;
             }
         } catch (Throwable t) {
             HookKit.warn(module, f.id + " skip: class MediaSaveConfig " + t);
@@ -173,13 +154,9 @@ final class WatermarkHooks {
      */
     private static int hookSaveEntry(XposedModule module, Feature f, ClassLoader cl) {
         try {
-            // 关键类：jn6.i 是保存入口，缺失即入口侧失效，记 critical 进失败横幅。
-            Class<?> cls = HookKit.findClass(module, f, cl, SAVE_CLAZZ, true);
-            if (cls == null) {
-                return 0;
-            }
-            Method m = HookKit.findByShape(module, f, cls, "i", mainActivityClass(cl), String.class,
-                    String.class, String.class, String.class);
+            // 关键锚点：jn6.i#i 是保存入口，缺失即入口侧失效，记 critical 进失败横幅。
+            Method m = HookKit.findAnchorMethod(module, f, cl,
+                    AnchorKeys.WATERMARK_SAVE_ENTRY, true);
             if (m == null) {
                 return 0;
             }
@@ -196,18 +173,9 @@ final class WatermarkHooks {
                         return replaced == null ? chain.proceed() : chain.proceed(replaced);
                     }) ? 1 : 0;
         } catch (Throwable t) {
-            HookKit.warn(module, f.id + " skip: class jn6.i " + t);
+            HookKit.warn(module, f.id + " skip: anchor jn6.i#i " + t);
             return 0;
         }
     }
 
-    /** jn6.i.i 的第一参在 9.52.0 经 DEX 复核就是 android.app.Activity（不是 XhsActivity），用 Activity 做形状匹配。 */
-    @Nullable
-    private static Class<?> mainActivityClass(ClassLoader cl) {
-        try {
-            return Class.forName("android.app.Activity", false, cl);
-        } catch (Throwable t) {
-            return null;
-        }
-    }
 }

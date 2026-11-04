@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# 混淆挂载点体检：小红书升级后跑这个，30 秒内知道哪些挂载点还活着。
+# 混淆挂载点体检：只读 app/src/main/resources/anchors.json（唯一一份表），
+# 用 DexSQL 对目标 APK 逐项核对方法/字段锚点与类锚点。
 #
 # 用法：
-#   tools/check-mounts.sh [APK路径] [--apk APK] [--dexsql PATH] [--aapt2 PATH]
+#   tools/check-mounts.sh [APK路径] [--apk APK] [--anchors PATH] [--dexsql PATH] [--aapt2 PATH]
 #
 # 参数优先级：CLI > 环境变量 > 常见安装路径。
 # 环境变量：
@@ -11,15 +12,14 @@
 #   AAPT2             aapt2 可执行文件（可选，仅用于显示 APK versionName）
 #
 # 缓存固定在 <repo>/tools/.dexsql-cache/（已在 .gitignore 中忽略）。
-# 缓存 META 记录 APK 路径 + 大小 + mtime + sha256；任一项不匹配（包括同路径
-# 替换 APK、旧版只有路径的 META）都会自动重建，不需要手工删缓存。
+# 缓存 META 记录 APK 路径 + 大小 + mtime + sha256；任一项不匹配都会自动重建。
 #
 # 判定规则：
 #   OK   = 类和方法都在，hook 大概还能挂上
-#   GONE = 类不存在了（R8 改了混淆名），需要按同目录的复核报告重新定位
-#   SIG  = 类还在但方法名变了，需要看具体差异再决定
+#   GONE = 类不存在了（R8 改了混淆名），需要按锚点 key 重新定位
+#   SIG  = 类还在但方法/参数/返回类型变了，需要看具体差异再决定
 #
-# 退出码：0 全部 OK；1 存在 GONE/SIG 或建缓存失败；2 参数/工具/APK 缺失。
+# 退出码：0 全部 OK；1 锚点表不完整或存在 GONE/SIG；2 参数/工具/APK 缺失。
 
 set -u
 
@@ -28,6 +28,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CACHE_DIR="$REPO_ROOT/tools/.dexsql-cache"
 
 TARGET_APK="${TARGET_APK:-${APK:-}}"
+ANCHORS="${ANCHORS:-$REPO_ROOT/app/src/main/resources/anchors.json}"
 DEXSQL="${DEXSQL:-}"
 AAPT2="${AAPT2:-}"
 POSITIONAL=""
@@ -35,10 +36,11 @@ POSITIONAL=""
 usage() {
     cat <<'EOF'
 Usage:
-  tools/check-mounts.sh [APK_PATH] [--apk APK] [--dexsql PATH] [--aapt2 PATH]
+  tools/check-mounts.sh [APK_PATH] [--apk APK] [--anchors PATH] [--dexsql PATH] [--aapt2 PATH]
 
 Arguments:
   APK_PATH / --apk   目标 APK（小红书 9.52.0）；也可用 TARGET_APK / APK
+  --anchors PATH     anchors.json 路径（默认 app/src/main/resources/anchors.json）
   --dexsql PATH      dexsql 可执行文件；也可用 DEXSQL
   --aapt2 PATH       aapt2 可执行文件；也可用 AAPT2（可选，仅显示 versionName）
   -h, --help         显示本帮助
@@ -60,6 +62,11 @@ while [ $# -gt 0 ]; do
             TARGET_APK="$2"; shift 2 ;;
         --apk=*)
             TARGET_APK="${1#*=}"; shift ;;
+        --anchors)
+            [ $# -ge 2 ] || die "--anchors needs a value"
+            ANCHORS="$2"; shift 2 ;;
+        --anchors=*)
+            ANCHORS="${1#*=}"; shift ;;
         --dexsql)
             [ $# -ge 2 ] || die "--dexsql needs a value"
             DEXSQL="$2"; shift 2 ;;
@@ -105,7 +112,6 @@ first_executable() {
     return 1
 }
 
-# SDK 根目录：环境变量、local.properties、常见安装位置（不写死机器路径）。
 sdk_roots() {
     local value line
     for value in "${ANDROID_HOME:-}" "${ANDROID_SDK_ROOT:-}"; do
@@ -147,7 +153,7 @@ if [ -z "$TARGET_APK" ]; then
     done
 fi
 
-# ---- dexsql 定位 ----------------------------------------------------------
+# ---- dexsql / aapt2 定位 --------------------------------------------------
 if [ -z "$DEXSQL" ]; then
     if command -v dexsql >/dev/null 2>&1; then
         DEXSQL="$(command -v dexsql)"
@@ -163,11 +169,11 @@ if [ -z "$DEXSQL" ]; then
             "$HOME/.local/bin/dexsql" \
             "$HOME/bin/dexsql" \
             "/usr/local/bin/dexsql" \
-            "/opt/dexsql/dexsql" || true)"
+            "/opt/dexsql/dexsql" \
+            "/e/tools/dexsql/dexsql.exe" || true)"
     fi
 fi
 
-# ---- aapt2 定位（可选） ---------------------------------------------------
 if [ -z "$AAPT2" ]; then
     if command -v aapt2 >/dev/null 2>&1; then
         AAPT2="$(command -v aapt2)"
@@ -189,6 +195,10 @@ if [ -z "$TARGET_APK" ] || [ ! -f "$TARGET_APK" ]; then
     echo "       or place base*.apk in the current directory / ~/Downloads." >&2
     exit 2
 fi
+if [ ! -f "$ANCHORS" ]; then
+    echo "ERROR: anchors.json not found: $ANCHORS" >&2
+    exit 2
+fi
 if [ -z "$DEXSQL" ] \
     || { ! is_executable_file "$DEXSQL" && ! command -v "$DEXSQL" >/dev/null 2>&1; }; then
     echo "ERROR: dexsql not found: ${DEXSQL:-<unset>}" >&2
@@ -198,12 +208,12 @@ if [ -z "$DEXSQL" ] \
 fi
 if [ -n "$AAPT2" ] && ! is_executable_file "$AAPT2"; then
     echo "WARN: aapt2 is not executable: $AAPT2; skipping versionName display" >&2
-    echo "      Fix: pass --aapt2 /path/to/aapt2 or set ANDROID_HOME/ANDROID_SDK_ROOT." >&2
     AAPT2=""
 fi
 
 echo
 echo "APK: $TARGET_APK"
+echo "anchors: $ANCHORS"
 if is_executable_file "$AAPT2"; then
     VERSION_NAME="$("$AAPT2" dump badging "$TARGET_APK" 2>/dev/null \
         | sed -n "s/.*versionName='\([^']*\)'.*/\1/p" | head -1)"
@@ -216,227 +226,309 @@ if is_executable_file "$AAPT2"; then
     fi
 else
     echo "WARN: aapt2 not found; skipping versionName display" >&2
-    echo "      Fix: pass --aapt2 /path/to/aapt2, export AAPT2=..., or set ANDROID_HOME/ANDROID_SDK_ROOT."
 fi
 
-# ---- 缓存 -----------------------------------------------------------------
-# 固定缓存在仓库内，避免把 dexsql 缓存写进 APK 所在目录或系统临时目录。
-if ! mkdir -p "$CACHE_DIR"; then
-    echo "ERROR: cannot create cache dir: $CACHE_DIR" >&2
-    exit 2
-fi
-CACHE="$CACHE_DIR/cache.dxc2"
-META="$CACHE_DIR/apk.meta"
-APK_ABS="$(cd "$(dirname "$TARGET_APK")" 2>/dev/null && pwd)/$(basename "$TARGET_APK")"
-
-file_size() {
-    wc -c < "$1" 2>/dev/null | tr -d '[:space:]'
-}
-file_mtime() {
-    stat -c %Y "$1" 2>/dev/null \
-        || stat -f %m "$1" 2>/dev/null \
-        || date -r "$1" +%s 2>/dev/null
-}
-sha256_of() {
-    if command -v sha256sum >/dev/null 2>&1; then
-        sha256sum "$1" 2>/dev/null | awk '{print $1}'
-    elif command -v shasum >/dev/null 2>&1; then
-        shasum -a 256 "$1" 2>/dev/null | awk '{print $1}'
-    elif command -v openssl >/dev/null 2>&1; then
-        openssl dgst -sha256 "$1" 2>/dev/null | awk '{print $NF}'
-    fi
-}
-
-APK_SIZE="$(file_size "$TARGET_APK")"
-APK_MTIME="$(file_mtime "$TARGET_APK")"
-APK_SHA="$(sha256_of "$TARGET_APK" || true)"
-
-meta_value() {
-    [ -f "$META" ] || return 1
-    sed -n "s/^$1=//p" "$META" | head -1
-}
-meta_matches() {
-    [ -f "$META" ] || return 1
-    [ "$(meta_value path)" = "$APK_ABS" ] || return 1
-    [ "$(meta_value size)" = "$APK_SIZE" ] || return 1
-    if [ -n "$APK_SHA" ]; then
-        [ "$(meta_value sha256)" = "$APK_SHA" ] || return 1
+# Git Bash 下 /tmp、/e/... 这类 MSYS 路径 Python 无法直接识别，先转成 Windows 路径。
+to_native_path() {
+    if command -v cygpath >/dev/null 2>&1; then
+        cygpath -w -- "$1" 2>/dev/null || printf '%s' "$1"
     else
-        # 没有 sha256 工具时退回 size + mtime；mtime 取不到就强制重建。
-        [ -n "$APK_MTIME" ] || return 1
-        [ "$(meta_value mtime)" = "$APK_MTIME" ] || return 1
+        printf '%s' "$1"
     fi
-    return 0
 }
-write_meta() {
-    local tmp="$META.tmp"
-    {
-        printf 'version=2\n'
-        printf 'path=%s\n' "$APK_ABS"
-        printf 'size=%s\n' "$APK_SIZE"
-        printf 'mtime=%s\n' "${APK_MTIME:-unknown}"
-        printf 'sha256=%s\n' "${APK_SHA:--}"
-    } > "$tmp" && mv -f "$tmp" "$META"
-}
+APK_NATIVE="$(to_native_path "$TARGET_APK")"
+ANCHORS_NATIVE="$(to_native_path "$ANCHORS")"
+DEXSQL_NATIVE="$(to_native_path "$DEXSQL")"
 
-echo "APK 指纹: size=$APK_SIZE mtime=${APK_MTIME:-unknown} sha256=${APK_SHA:-unavailable}"
+PYTHON="${PYTHON:-python}"
+command -v "$PYTHON" >/dev/null 2>&1 \
+    || die "未找到 python；安装 Python 3 或设置 PYTHON 环境变量"
 
-CACHE_REUSABLE=0
-if [ -f "$CACHE" ] && meta_matches; then
-    CACHE_REUSABLE=1
-fi
-if [ "$CACHE_REUSABLE" -eq 0 ]; then
-    rm -rf "$CACHE_DIR"
-    mkdir -p "$CACHE_DIR" || {
-        echo "ERROR: cannot create cache dir: $CACHE_DIR" >&2
-        exit 2
-    }
-    echo "== 首次为该 apk 建 DexSQL 缓存（约 40 秒）..."
-    if ! "$DEXSQL" prepare-cache --input "$TARGET_APK" --output "$CACHE_DIR" \
-            --trusted-input > "$CACHE_DIR/prepare.log" 2>&1; then
-        echo "ERROR: dexsql prepare-cache failed" >&2
-        sed -n '1,20p' "$CACHE_DIR/prepare.log" >&2
-        exit 1
-    fi
-    if [ ! -f "$CACHE" ]; then
-        echo "ERROR: dexsql did not create cache: $CACHE" >&2
-        sed -n '1,20p' "$CACHE_DIR/prepare.log" >&2
-        exit 1
-    fi
-    write_meta || echo "WARN: cannot write cache meta: $META" >&2
-fi
-echo "缓存: $CACHE"
-echo
+CHECK_MOUNTS_REPO_ROOT="$REPO_ROOT" \
+CHECK_MOUNTS_APK="$APK_NATIVE" \
+CHECK_MOUNTS_ANCHORS="$ANCHORS_NATIVE" \
+CHECK_MOUNTS_DEXSQL="$DEXSQL_NATIVE" \
+CHECK_MOUNTS_CACHE="$CACHE_DIR" \
+"$PYTHON" -I - <<'PY'
+import hashlib
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
 
-q() { "$DEXSQL" query-cache --cache-file "$CACHE" --trusted-input --sql "$1" 2>/dev/null; }
+REPO_ROOT = Path(os.environ["CHECK_MOUNTS_REPO_ROOT"])
+APK = Path(os.environ["CHECK_MOUNTS_APK"])
+ANCHORS_PATH = Path(os.environ["CHECK_MOUNTS_ANCHORS"])
+DEXSQL = os.environ["CHECK_MOUNTS_DEXSQL"]
+CACHE_DIR = Path(os.environ["CHECK_MOUNTS_CACHE"])
 
-# 挂载点清单：类描述符|方法名|功能|复核报告|参数个数（可选，空=不校验）
-# 第 5 列填了数字时，用 methods 表的 param_count 做"签名形状"校验：
-# 方法还在但参数个数变了 → SIG；多个合法重载用逗号分隔（例如 2,3）。
-# 第 5 列为空 = 仅校验名称、未校验签名，输出行会显式标注。
-MOUNTS='Lcom/xingin/advert/spi/AdsIndexSpiImp;|openLCBSplashAdsV2|P0-1 内嵌开屏|splash_ad_path|4
-Lcom/xingin/advert/spi/AdsIndexSpiImp;|openLCBRedSplashAdsV2|P0-1 红开屏|splash_ad_path|8
-Lcom/xingin/advert/spi/AdsIndexSpiImp;|openLCBBrandMaxSplashAds|P0-1 品牌开屏|splash_ad_path|5
-Lcom/xingin/advert/spi/AdsIndexSpiImp;|openBrandMax|P0-1 品牌开屏|splash_ad_path|4
-Lcom/xingin/advert/spi/AdsIndexSpiImp;|openNeedLazyHFSplashAds|P0-1 懒加载开屏|splash_ad_path|6
-Lcom/xingin/advert/spi/AdsIndexSpiImp;|startAnim|P0-1 开屏动画|splash_ad_path|4
-Lcom/xingin/advert/spi/AdsIndexSpiImp;|canLazyOpenSplash|P0-1 开屏决策|splash_ad_path|1
-Lcom/xingin/advert/spi/AdsIndexSpiImp;|canNeedNewCloser|P0-1 开屏决策|splash_ad_path|1
-Lcom/xingin/advert/intersitial/ui/a;|d|P0-1 全屏开屏出口|splash_ad_path|2
-Lcom/xingin/advert/intersitial/ui2/view/SplashAdActivity$a;|a|P0-1 全屏开屏兜底|splash_ad_path|2
-Lcom/xingin/advert/intersitial/ui2/view/dynamic/SplashDynamicActivity$a;|a|P0-1 动态开屏兜底|splash_ad_path|2
-Lcom/xingin/advert/intersitial/ui2/cny/SplashCNYActivity$a;|a|P0-1 CNY 开屏兜底|splash_ad_path|2
-Lcom/xingin/advert/intersitial/ui/InterstitialAdsActivity$a;|a|P0-1 插屏开屏兜底|splash_ad_path|2
-Lcom/xingin/advert/intersitial/ui/SplashAdPlaceHolderView;|onCreateView|P0-1 冷启动占位|splash_ad_path|3
-Lcom/xingin/advert/spi/AdsHomeFeedManagerServiceImpl;|handleFeedDataIfNeed|P0-2 2-pos 比对|verify_p0_2|2
-Lcom/xingin/advert/spi/AdsHomeFeedManagerServiceImpl;|recordAdsNoteData|P0-2 2-pos 记录|verify_p0_2|2
-Lcom/xingin/xhs/homepage/explorefeed/mainfeed/view/ExploreView;|g0|P0-2 广告插入守卫|verify_p0_2|2
-Lcom/xingin/xhs/homepage/explorefeed/mainfeed/view/ExploreView;|S|P0-2 列表追加过滤|verify_p0_2|1
-Lcom/xingin/xhs/homepage/explorefeed/mainfeed/view/ExploreView;|C0|P0-2 列表刷新过滤|verify_p0_2|2
-Lvha/s;|Pd|P0-2 分页上游过滤|verify_p0_2|3
-Lcom/xingin/advert/spi/AdsCommentComponentBinderCreatorImpl;|commentAdvertComponentDSLEnable|P0-3 评论广告|specs|0
-Lcom/xingin/update/UpdateDialogActivity;|onCreate|P0-4 更新弹窗|specs|1
-Lcom/xingin/update/UpdateDialogActivity;|he|P0-4 更新弹窗补充|specs|0
-Lcom/xingin/advert/spi/AdvertSpiImpl;|gotoExtApp|P1-7 外跳主挂|verify_p1_7|3
-Lcom/xingin/xywebview/util/XYWebViewUtil;|b|P1-7 外跳汇聚|verify_p1_7|5
-Ljv8/e;|b|P1-9 剪贴板写入|verify_p1_9|2
-Lcom/xingin/android/redutils/q;|a|P1-9 复制链接收口|verify_p1_9|3
-Ljn6/j;|a|P1-11 水印主挂|verify_watermark|6
-Ljn6/i;|i|P1-11 水印入口|verify_watermark|11
-Lcom/xingin/entities/MediaSaveConfig;|c|P1-11 语义 getter|verify_watermark|0
-Lzm7/j;|c|EN-03 实况保存入口|live_photo|3
-Ldg7/h;|<init>|EN-03 下载参数形状(8参e/f/g/h)|live_photo|8
-Lp32/h;|a|EN-03 保存链路开关(code=1)|live_photo|1
-Lg42/e;|d|EN-03 旧链路视频下载|live_photo|2
-Lcom/xingin/entities/notedetail/FunctionSwitch;|a|EN-04 强制保存开关(enable)|en_4_force_save|0
-Lcom/xingin/entities/notedetail/FunctionSwitch;|c|EN-04 强制保存类型(type)|en_4_force_save|0
-Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateHelper;|isAutoPlayOpen|P1-12 自动播放|specs|0
-Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateHelper;|isAutoPlayOpenServer|P1-12 自动播放|specs|0
-Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateTabHelper;|isAutoPlayOpen|P1-12 自动播放|specs|0
-Lcom/xingin/detailfeed/services/autoscroll/AutoScrollStateTabHelper;|isAutoPlayOpenServer|P1-12 自动播放|specs|0
-Lpc0/c0;|o|P1-13 搜索广告|verify_p1_13|4
-Lcom/xingin/matrix/notedetail/asyncwidgets/advert/AdvertV2View;|a|P1-14 详情广告条|verify_p1_14|1
-Lcom/xingin/matrix/notedetail/asyncwidgets/advert/AdvertV2View;|b|P1-14 详情广告条|verify_p1_14|1
-Lyr7/o;|invoke|P1-15 已删除笔记查看|verify_p1_15|1
-Lcom/xingin/lurker/appscore/ui/AppScoreDialogActivity;|onCreate|P1-16 评分弹窗|verify_p1_16|1
-Lcom/xingin/xhs/app/ShareApplication;|tryLaunchGpReview|P1-16 系统评分|verify_p1_16|1
-Lcom/xingin/spi/IGrowthCupidProxyImpl;|pushGuideDialogDialogShow|P1-17 通知引导|verify_p1_17|4
-Lcom/xingin/spi/IGrowthCupidProxyImpl;|showGuidePopupWindow|P1-17 通知引导|verify_p1_17|2
-Lcom/xingin/spi/IGrowthCupidProxyImpl;|showPushGuidShowForInside|P1-17 通知引导|verify_p1_17|2
-Lcom/xingin/spi/IGrowthCupidProxyImpl;|openPushGuideActivity|P1-17 通知引导|verify_p1_17|2
-Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|shouldShowInternal|P1-18 满意度调研|verify_p1_18|1
-Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|showForVideo|P1-18 满意度兜底|verify_p1_18|5
-Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|showForImageText|P1-18 满意度兜底|verify_p1_18|4
-Lcom/xingin/growth/snackbar/ContentRatingProxyImpl;|showContentRatingSnackBarIfNeeded|P1-18 满意度公开入口|verify_p1_18|4
-Lcom/xingin/login/manager/UploadContactServiceExtension;|start|P1-19 通讯录同步|verify_p1_19|1
-Lcom/xingin/login/manager/UploadContactServiceExtension;|requestContactsSync|P1-19 通讯录同步|verify_p1_19|2,3
-Lcom/xingin/login/manager/UploadContactServiceExtension;|installLifecycleObserver|P1-19 通讯录同步|verify_p1_19|1
-Lcom/xingin/commercial/vision/post/spi/GoodsCommentAddInProcessor;|startAddIn|P1-20 评论带货|verify_p1_20|5
-Lcom/xingin/xhs/homepage/explorefeed/mainfeed/view/ExploreView;|S|P1-21/22/23 直播/带货/投票卡过滤|verify_p1_21|1
-Lcom/xingin/xhs/homepage/explorefeed/mainfeed/view/ExploreView;|C0|P1-21/22/23 直播/带货/投票卡过滤|verify_p1_21|2
-Lvha/s;|Pd|P1-21/22/23 直播/带货/投票卡过滤|verify_p1_21|3
-Lcom/xingin/abtest/impl/XYExperimentImpl;|f|P2-1 AB 读取 getValueJustOnce|verify_p2_1|3
-Lcom/xingin/abtest/impl/XYExperimentImpl;|b|P2-1 AB 读取 getValue|verify_p2_1|3
-Lcom/xingin/configcenter/XYConfigCenterImpl;|l|P2-1 ConfigCenter 取值|verify_p2_1|1'
+SCHEMA_VERSION = 1
+CHECKLIST_SIZE = 64
+TARGET_PACKAGE = "com.xingin.xhs"
 
-printf '%-8s %-92s %s\n' "状态" "挂载点" "功能"
-printf '%.0s-' {1..140}; echo
+errors = []
 
-bad=0
-sig_checked=0
-name_only=0
-while IFS='|' read -r cls mth feat rep pc; do
-    [ -z "$cls" ] && continue
-    cls_hit=$(q "SELECT count(*) FROM classes WHERE descriptor='$cls'" \
-        | grep -oE '^\| [0-9]+' | tr -d '| ')
-    if [ "${cls_hit:-0}" = "0" ]; then
-        printf '%-8s %-64s %s\n' "GONE" "${cls#L}" "$feat  → 报告: $rep"
-        bad=$((bad+1))
+
+def out(message=""):
+    print(message)
+
+
+def fail(message):
+    errors.append(message)
+    print("FAIL: %s" % message)
+
+
+def warn(message):
+    print("WARN: %s" % message)
+
+
+def load_json_no_duplicates(path):
+    def no_duplicates(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("重复键：%s" % key)
+            result[key] = value
+        return result
+
+    with path.open("r", encoding="utf-8") as handle:
+        return json.load(handle, object_pairs_hook=no_duplicates)
+
+
+# ------------------------------------------------------------ 锚点表完整性
+out("==> anchors: %s" % ANCHORS_PATH)
+try:
+    payload = load_json_no_duplicates(ANCHORS_PATH)
+except (OSError, ValueError, json.JSONDecodeError) as exc:
+    out("FAIL: 无法解析 anchors.json：%s" % exc)
+    raise SystemExit(1)
+
+if not isinstance(payload, dict):
+    fail("anchors.json 顶层不是对象")
+    payload = {}
+
+app_version = payload.get("appVersion")
+version_code = payload.get("versionCode")
+schema_version = payload.get("schemaVersion")
+generated_by = payload.get("generatedBy")
+anchors = payload.get("anchors")
+classes = payload.get("classes")
+
+if isinstance(schema_version, bool) or schema_version != SCHEMA_VERSION:
+    fail("schemaVersion 缺失或不是 %d：%r" % (SCHEMA_VERSION, schema_version))
+if not isinstance(app_version, str) or not app_version.strip():
+    fail("appVersion 缺失或不是非空字符串")
+if isinstance(version_code, bool) or not isinstance(version_code, int) or version_code <= 0:
+    fail("versionCode 缺失或不是正整数")
+if generated_by != "tools/gen_anchors.py":
+    fail("generatedBy 不是 tools/gen_anchors.py：%r" % generated_by)
+if not isinstance(anchors, dict):
+    fail("anchors 缺失或不是对象")
+    anchors = {}
+if not isinstance(classes, dict):
+    fail("classes 缺失或不是对象")
+    classes = {}
+
+overlap = sorted(set(anchors) & set(classes))
+if overlap:
+    fail("anchors 与 classes 存在同名 key：%s" % ", ".join(overlap))
+
+for key, entry in sorted(anchors.items()):
+    if not isinstance(key, str) or not key:
+        fail("锚点 key 非法：%r" % (key,))
         continue
-    fi
-    mth_hit=$(q "SELECT count(*) FROM methods WHERE class_descriptor='$cls' AND name='$mth'" \
-        | grep -oE '^\| [0-9]+' | tr -d '| ')
-    if [ "${mth_hit:-0}" = "0" ]; then
-        printf '%-8s %-64s %s\n' "SIG" "${cls#L}#$mth  (类在、方法没了)" "$feat  → 报告: $rep"
-        bad=$((bad+1))
+    if not isinstance(entry, dict):
+        fail("锚点 %s 不是对象" % key)
         continue
-    fi
-    # 可选第 5 列：填了数字就做参数个数校验（同名重载任一匹配即可；
-    # 逗号分隔表示多个合法重载，例如 requestContactsSync 的 2 参和 3 参都挂）。
-    sig_note=""
-    if [ -n "$pc" ]; then
-        sig_checked=$((sig_checked + 1))
-        pc_hit=0
-        for want in $(printf '%s' "$pc" | tr ',' ' '); do
-            [ -n "$want" ] || continue
-            hit=$(q "SELECT count(*) FROM methods WHERE class_descriptor='$cls' AND name='$mth' AND param_count=$want" \
-                | grep -oE '^\| [0-9]+' | tr -d '| ')
-            if [ "${hit:-0}" != "0" ]; then
-                pc_hit=1
-                break
-            fi
-        done
-        if [ "$pc_hit" -eq 0 ]; then
-            actual_pc=$(q "SELECT DISTINCT param_count FROM methods WHERE class_descriptor='$cls' AND name='$mth'" \
-                | grep -oE '[0-9]+' | paste -sd, -)
-            printf '%-8s %-64s %s\n' "SIG" \
-                "${cls#L}#$mth  (参数个数变了，期望 $pc，实际 ${actual_pc:-?})" \
-                "$feat  → 报告: $rep"
-            bad=$((bad+1))
+    for field in ("c", "m", "s", "feature", "note"):
+        value = entry.get(field)
+        if not isinstance(value, str) or not value:
+            fail("锚点 %s 缺少必填字段 %s" % (key, field))
+    if not isinstance(entry.get("critical"), bool):
+        fail("锚点 %s 的 critical 不是布尔值" % key)
+    feature = entry.get("feature")
+    if isinstance(feature, str) and feature \
+            and not feature.startswith(("AD-", "UI-", "PV-", "EN-", "EX-")):
+        fail("锚点 %s 的 feature 不是统一功能编号：%r" % (key, feature))
+
+for key, cls in sorted(classes.items()):
+    if not isinstance(key, str) or not key:
+        fail("类锚点 key 非法：%r" % (key,))
+    if not isinstance(cls, str) or not cls:
+        fail("类锚点 %s 不是非空字符串" % key)
+
+if len(anchors) != CHECKLIST_SIZE:
+    fail("anchors 条目数 %d，必须覆盖 check-mounts 的 %d 项"
+         % (len(anchors), CHECKLIST_SIZE))
+
+# 版本元数据与 README 首屏目标版本保持一致。
+try:
+    readme_text = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+except OSError:
+    readme_text = ""
+match = re.search(r"适配小红书\s*([0-9][0-9.]*)\s*（([0-9]+)）", readme_text)
+if match:
+    readme_version, readme_code = match.group(1), int(match.group(2))
+    if app_version != readme_version or version_code != readme_code:
+        fail("anchors.json 版本元数据 %s/%s 与 README 目标版本 %s/%s 不一致"
+             % (app_version, version_code, readme_version, readme_code))
+else:
+    warn("未能从 README.md 解析目标版本，跳过版本元数据对照")
+
+out("==> 锚点表：%d anchors + %d classes（schema v%d，appVersion %s / versionCode %s）"
+    % (len(anchors), len(classes), schema_version, app_version, version_code))
+if not errors:
+    out("==> 锚点表完整性 OK（schema、必填字段、feature/critical、版本元数据）")
+
+# ------------------------------------------------------------ DexSQL 缓存
+def sha256_of(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def ensure_cache():
+    cache_file = CACHE_DIR / "cache.dxc2"
+    meta_path = CACHE_DIR / "apk.meta"
+    size = APK.stat().st_size
+    digest = sha256_of(APK)
+    reusable = False
+    if cache_file.is_file() and meta_path.is_file():
+        meta = {}
+        for line in meta_path.read_text(encoding="utf-8", errors="replace").splitlines():
+            if "=" in line:
+                key, value = line.split("=", 1)
+                meta[key] = value
+        reusable = (meta.get("path") == str(APK.resolve())
+                    and meta.get("size") == str(size)
+                    and meta.get("sha256") == digest)
+    if reusable:
+        return cache_file
+
+    shutil.rmtree(CACHE_DIR, ignore_errors=True)
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    out("==> 首次为该 apk 建 DexSQL 缓存（约 40 秒）...")
+    result = subprocess.run(
+        [DEXSQL, "prepare-cache", "--input", str(APK),
+         "--output", str(CACHE_DIR), "--trusted-input"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if result.returncode != 0 or not cache_file.is_file():
+        out("FAIL: dexsql prepare-cache failed")
+        print((result.stderr or result.stdout)[:2000])
+        raise SystemExit(1)
+    meta_path.write_text(
+        "version=2\npath=%s\nsize=%s\nmtime=%s\nsha256=%s\n"
+        % (APK.resolve(), size, int(APK.stat().st_mtime), digest),
+        encoding="utf-8")
+    return cache_file
+
+
+def query_count(cache_file, sql):
+    result = subprocess.run(
+        [DEXSQL, "query-cache", "--cache-file", str(cache_file),
+         "--trusted-input", "--sql", sql],
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or result.stdout.strip())
+    rows = []
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if not line.startswith("|") or set(line) <= set("|-+ "):
             continue
-        fi
-    else
-        name_only=$((name_only + 1))
-        sig_note="  [仅校验名称/未校验签名]"
-    fi
-    printf '%-8s %-64s %s\n' "OK" "${cls#L}#$mth" "$feat$sig_note"
-done <<< "$MOUNTS"
+        rows.append([cell.strip() for cell in line.strip("|").split("|")])
+    if not rows:
+        return 0
+    try:
+        return int(rows[-1][0])
+    except (ValueError, IndexError):
+        return 0
 
-echo
-echo "OK=还在；GONE=混淆名变了，要重新定位；SIG=方法名变了，看报告里的链路。"
-echo "复核报告路径见上表第四列（research/agy-scratch/，仅本地维护）。"
 
-echo
-echo "签名校验：参数个数 $sig_checked 项 / 仅名称 $name_only 项"
-echo "汇总：GONE/SIG = $bad"
-[ "$bad" -eq 0 ] || exit 1
+cache_file = ensure_cache()
+out("==> 缓存: %s" % cache_file)
+
+# ------------------------------------------------------------ 逐项校验
+method_ok = method_sig = method_gone = 0
+field_ok = field_sig = field_gone = 0
+class_ok = class_gone = 0
+
+for key, entry in sorted(anchors.items()):
+    is_method = entry["s"].startswith("(")
+    table = "methods" if is_method else "fields"
+    if is_method:
+        descriptor = "L%s;->%s%s" % (
+            entry["c"].replace(".", "/"), entry["m"], entry["s"])
+    else:
+        descriptor = "L%s;->%s:%s" % (
+            entry["c"].replace(".", "/"), entry["m"], entry["s"])
+    try:
+        count = query_count(
+            cache_file, "SELECT count(*) AS c FROM %s WHERE descriptor='%s'"
+                        % (table, descriptor))
+    except RuntimeError as exc:
+        fail("dexsql 查询%s %s 失败：%s"
+             % ("方法" if is_method else "字段", key, exc))
+        continue
+    if count > 0:
+        if is_method:
+            method_ok += 1
+        else:
+            field_ok += 1
+        continue
+    try:
+        class_count = query_count(
+            cache_file, "SELECT count(*) AS c FROM types WHERE java_name='%s'"
+                        % entry["c"])
+    except RuntimeError as exc:
+        fail("dexsql 查询类 %s 失败：%s" % (entry["c"], exc))
+        continue
+    if class_count > 0:
+        if is_method:
+            method_sig += 1
+        else:
+            field_sig += 1
+        print("SIG %s: %s" % (key, descriptor))
+    else:
+        if is_method:
+            method_gone += 1
+        else:
+            field_gone += 1
+        print("GONE %s: %s" % (key, descriptor))
+
+for key, cls in sorted(classes.items()):
+    try:
+        count = query_count(
+            cache_file, "SELECT count(*) AS c FROM types WHERE java_name='%s'" % cls)
+    except RuntimeError as exc:
+        fail("dexsql 查询类 %s 失败：%s" % (key, exc))
+        continue
+    if count > 0:
+        class_ok += 1
+    else:
+        class_gone += 1
+        print("GONE class %s: %s" % (key, cls))
+
+if method_sig or method_gone:
+    fail("方法锚点未全命中：SIG %d / GONE %d" % (method_sig, method_gone))
+if field_sig or field_gone:
+    fail("字段锚点未全命中：SIG %d / GONE %d" % (field_sig, field_gone))
+if class_gone:
+    fail("类锚点未全命中：GONE %d" % class_gone)
+
+out("==> 结果：methods OK %d/%d（SIG %d / GONE %d）；"
+    "fields OK %d/%d（SIG %d / GONE %d）；classes OK %d/%d（GONE %d）"
+    % (method_ok, method_ok + method_sig + method_gone, method_sig, method_gone,
+       field_ok, field_ok + field_sig + field_gone, field_sig, field_gone,
+       class_ok, class_ok + class_gone, class_gone))
+if errors:
+    out("==> 结果：FAIL（%d 项）" % len(errors))
+    raise SystemExit(1)
+out("==> check-mounts OK")
+raise SystemExit(0)
+PY
+exit $?

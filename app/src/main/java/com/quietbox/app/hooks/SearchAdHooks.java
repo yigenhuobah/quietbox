@@ -2,6 +2,7 @@ package com.quietbox.app.hooks;
 
 import com.quietbox.app.Feature;
 import com.quietbox.app.HookState;
+import com.quietbox.app.anchor.AnchorKeys;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -24,25 +25,19 @@ import io.github.libxposed.api.XposedModule;
  */
 final class SearchAdHooks {
 
-    private static final String CLAZZ = "pc0.c0";
-    private static final String METHOD = "o";
-    private static final String AD_ENTITY = "com.xingin.alioth.entities.i";
-
     private SearchAdHooks() {
     }
 
     static void install(XposedModule module, ClassLoader cl) {
         Feature f = Feature.SEARCH_AD_FILTER;
         try {
-            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ, true);
-            if (cls == null) {
-                return;
-            }
-            Class<?> ad = HookKit.findClass(module, f, cl, AD_ENTITY, true);
+            Class<?> ad = HookKit.findAnchorClass(module, f, cl,
+                    AnchorKeys.SEARCH_AD_ENTITY, true);
             if (ad == null) {
                 return;
             }
-            Method m = HookKit.findByNameAndArity(cls, METHOD, 4);
+            Method m = HookKit.findAnchorMethod(module, f, cl,
+                    AnchorKeys.SEARCH_AD_RESULT_FILTER, true);
             HookKit.install(module, f, "pc0.c0#o", m, filterHook(module, f, ad));
             HookState.note(f, "搜索仓库返回列表过滤 alioth.entities.i");
         } catch (Throwable t) {

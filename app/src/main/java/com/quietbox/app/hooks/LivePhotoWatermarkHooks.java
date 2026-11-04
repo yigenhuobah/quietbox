@@ -4,6 +4,7 @@ import androidx.annotation.Nullable;
 
 import com.quietbox.app.Feature;
 import com.quietbox.app.HookState;
+import com.quietbox.app.anchor.AnchorKeys;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -59,17 +60,8 @@ import io.github.libxposed.api.XposedModule;
  */
 final class LivePhotoWatermarkHooks {
 
-    /** 实况保存入口：zm7.j#c(pr7.l, dg7.h, Z)V。9.52.0 实测签名。 */
-    private static final String ENTRY_CLAZZ = "zm7.j";
-
-    /** 入口第 1 参：保存事件监听（未挂，仅用于签名匹配）。 */
-    private static final String ENTRY_LISTENER = "pr7.l";
-
-    /** 入口第 2 参：FeedbackDownloadImage，字段 e/h 为两个水印开关。 */
+    /** 日志用短名：入口第 2 参 FeedbackDownloadImage（dg7.h），字段 e/h 为水印开关。 */
     private static final String ENTRY_FEEDBACK = "dg7.h";
-
-    /** ConfigCenter 关闭开关读取点：p32.h#a(I)Z。 */
-    private static final String SWITCH_CLAZZ = "p32.h";
 
     /**
      * 实况保存链路开关 code：zm7.j#c 内 {@code const v5, 0x1} 传入 {@code p32.h#a(I)Z}。
@@ -102,14 +94,12 @@ final class LivePhotoWatermarkHooks {
      */
     private static int hookSaveEntry(XposedModule module, Feature f, ClassLoader cl) {
         try {
-            Class<?> entry = Class.forName(ENTRY_CLAZZ, false, cl);
-            Class<?> listener = Class.forName(ENTRY_LISTENER, false, cl);
-            Class<?> feedback = Class.forName(ENTRY_FEEDBACK, false, cl);
-            Method m = HookKit.findMethodQuiet(module, f, entry, "c", listener, feedback, boolean.class);
+            Method m = HookKit.findAnchorMethod(module, f, cl,
+                    AnchorKeys.LIVE_PHOTO_SAVE_ENTRY, true);
             if (m == null) {
                 return 0;
             }
-            HookKit.install(module, f, ENTRY_CLAZZ + "#c(disableWaterMark=true)", m,
+            HookKit.install(module, f, "zm7.j#c(disableWaterMark=true)", m,
                     chain -> {
                         int set = 0;
                         try {
@@ -119,14 +109,14 @@ final class LivePhotoWatermarkHooks {
                             }
                             HookKit.hit(module, f, ENTRY_FEEDBACK + ".e/h set=" + set);
                         } catch (Throwable t) {
-                            HookKit.error(module, f.id + " intercept error " + ENTRY_CLAZZ + "#c", t);
+                            HookKit.error(module, f.id + " intercept error zm7.j#c", t);
                         }
                         // 改写的是参数对象内部字段，原参 proceed 即可。
                         return chain.proceed();
                     });
             return 1;
         } catch (Throwable t) {
-            HookKit.warn(module, f.id + " skip: class " + ENTRY_CLAZZ + "/" + ENTRY_FEEDBACK + " " + t);
+            HookKit.warn(module, f.id + " skip: anchor zm7.j#c " + t);
             return 0;
         }
     }
@@ -137,28 +127,28 @@ final class LivePhotoWatermarkHooks {
      */
     private static int hookSaveSwitch(XposedModule module, Feature f, ClassLoader cl) {
         try {
-            Class<?> cls = Class.forName(SWITCH_CLAZZ, false, cl);
-            Method m = HookKit.findMethodQuiet(module, f, cls, "a", int.class);
+            Method m = HookKit.findAnchorMethod(module, f, cl,
+                    AnchorKeys.LIVE_PHOTO_SAVE_SWITCH, true);
             if (m == null) {
                 return 0;
             }
-            HookKit.install(module, f, SWITCH_CLAZZ + "#a(code=" + LIVE_PHOTO_SAVE_SWITCH_CODE + "→false)", m,
+            HookKit.install(module, f, "p32.h#a(code=" + LIVE_PHOTO_SAVE_SWITCH_CODE + "→false)", m,
                     chain -> {
                         try {
                             List<Object> args = chain.getArgs();
                             if (args.size() == 1 && args.get(0) instanceof Integer
                                     && isLivePhotoSwitchCode((Integer) args.get(0))) {
-                                HookKit.hit(module, f, SWITCH_CLAZZ + "#a(" + args.get(0) + ") → false");
+                                HookKit.hit(module, f, "p32.h#a(" + args.get(0) + ") → false");
                                 return Boolean.FALSE;
                             }
                         } catch (Throwable t) {
-                            HookKit.error(module, f.id + " intercept error " + SWITCH_CLAZZ + "#a", t);
+                            HookKit.error(module, f.id + " intercept error p32.h#a", t);
                         }
                         return chain.proceed();
                     });
             return 1;
         } catch (Throwable t) {
-            HookKit.warn(module, f.id + " skip: class " + SWITCH_CLAZZ + " " + t);
+            HookKit.warn(module, f.id + " skip: anchor p32.h#a " + t);
             return 0;
         }
     }

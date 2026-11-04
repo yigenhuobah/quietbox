@@ -2,12 +2,11 @@ package com.quietbox.app.hooks;
 
 import android.content.ClipData;
 import android.content.ClipDescription;
-import android.content.ClipboardManager;
-import android.content.Context;
 
 import androidx.annotation.Nullable;
 
 import com.quietbox.app.Feature;
+import com.quietbox.app.anchor.AnchorKeys;
 import com.quietbox.app.HookState;
 
 import java.lang.reflect.Method;
@@ -48,11 +47,6 @@ import io.github.libxposed.api.XposedModule;
  */
 final class CopyLinkHooks {
 
-    /** 剪贴板真正写入点：jv8/e.b(ClipboardManager, ClipData) —— 全 APK 唯一调 ClipboardManager.setPrimaryClip 的地方。9.51.0 为 u0b.e。 */
-    private static final String CLIP_WRITER = "jv8.e";
-
-    /** 所有"复制链接"的 String 收口（9.52.0 恢复真实类名，作主挂失效时的兜底）。9.51.0 为 o92.q。 */
-    private static final String COPY_FUNNEL = "com.xingin.android.redutils.q";
     private static final String COPY_LABEL = "ug-share-copy-link";
 
     private static final String[] TRACKING = {"share_id", "xhsshare", "shareRedId", "apptime", "sid"};
@@ -84,16 +78,13 @@ final class CopyLinkHooks {
         try {
             // 主挂：真正的剪贴板写入点 jv8/e.b。ClipboardProxyImpl.setPrimaryClip 只是 SPI
             // 回调（只打日志、不写剪贴板），在那里改 ClipData 对剪贴板零效果，已弃用。
-            Class<?> writer = HookKit.findClass(module, f, cl, CLIP_WRITER, true);
-            Method write = HookKit.findMethod(module, f, writer, "b",
-                    ClipboardManager.class, ClipData.class);
+            Method write = HookKit.findAnchorMethod(module, f, cl,
+                    AnchorKeys.COPY_LINK_CLIPBOARD_WRITE, true);
             HookKit.install(module, f, "jv8.e#b(setPrimaryClip)",
                     write, clipDataHook(module, f, stripXsecToken));
 
             // 副挂/兜底：所有"复制链接"的 String 收口。主挂是混淆类，被 R8 重命名时靠它兜底。
-            Class<?> funnel = HookKit.findClass(module, f, cl, COPY_FUNNEL);
-            Method a = HookKit.findMethodQuiet(module, f, funnel, "a",
-                    Context.class, CharSequence.class, CharSequence.class);
+            Method a = HookKit.anchorMethod(cl, AnchorKeys.COPY_LINK_FUNNEL);
             HookKit.install(module, f, "redutils/q#a", a, funnelHook(module, f, stripXsecToken));
 
             HookState.note(f, "剪贴板写入点 jv8.e#b（主挂）+ 复制链接 String 收口 redutils/q#a（兜底，label=" + COPY_LABEL + "）");

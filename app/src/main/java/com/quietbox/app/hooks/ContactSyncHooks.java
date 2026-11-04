@@ -1,6 +1,7 @@
 package com.quietbox.app.hooks;
 
 import com.quietbox.app.Feature;
+import com.quietbox.app.anchor.AnchorKeys;
 
 import java.lang.reflect.Method;
 
@@ -17,31 +18,31 @@ import io.github.libxposed.api.XposedModule;
  */
 final class ContactSyncHooks {
 
-    private static final String CLAZZ =
-            "com.xingin.login.manager.UploadContactServiceExtension";
-
     private ContactSyncHooks() {
     }
 
     static void install(XposedModule module, ClassLoader cl) {
         Feature f = Feature.CONTACT_SYNC_OFF;
         try {
-            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ, true);
             HookKit.install(module, f, "start",
-                    HookKit.findMethod(module, f, cls, "start", android.content.Context.class),
+                    HookKit.findAnchorMethod(module, f, cl,
+                            AnchorKeys.CONTACT_SYNC_START, true),
                     HookKit.skipVoid(module, f, "start"));
-            HookKit.install(module, f, "requestContactsSync",
-                    HookKit.findMethod(module, f, cls, "requestContactsSync",
-                            android.content.Context.class, String.class),
+            Method request = HookKit.findAnchorMethod(module, f, cl,
+                    AnchorKeys.CONTACT_SYNC_REQUEST, true);
+            HookKit.install(module, f, "requestContactsSync", request,
                     HookKit.skipVoid(module, f, "requestContactsSync"));
             // DEX 已确认的同名 3 参重载：requestContactsSync(Context, String, z2.b)。
             // 带 onCompleted 回调契约，不能整体 skipVoid（回调会随方法体一起消失）。
+            // 64 项清单里该行写作 "2,3"，锚点钉住 2 参主入口；3 参重载按同类的
+            // 名字+参数个数解析，作为附加挂载（不单独占一个锚点 key）。
+            Class<?> cls = request == null ? null : request.getDeclaringClass();
             HookKit.install(module, f, "requestContactsSync#3",
                     HookKit.findByNameAndArity(module, f, cls, "requestContactsSync", 3),
                     completeThenSkip(module, f, "requestContactsSync#3"));
             HookKit.install(module, f, "installLifecycleObserver",
-                    HookKit.findMethod(module, f, cls, "installLifecycleObserver",
-                            android.app.Application.class),
+                    HookKit.findAnchorMethod(module, f, cl,
+                            AnchorKeys.CONTACT_SYNC_LIFECYCLE, true),
                     HookKit.skipVoid(module, f, "installLifecycleObserver"));
         } catch (Throwable t) {
             HookKit.error(module, f.id + " install aborted", t);

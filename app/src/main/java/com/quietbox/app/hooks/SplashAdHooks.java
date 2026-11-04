@@ -1,15 +1,12 @@
 package com.quietbox.app.hooks;
 
-import android.content.Context;
-import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
-import android.view.ViewGroup;
 
 import com.quietbox.app.Feature;
 import com.quietbox.app.HookState;
+import com.quietbox.app.anchor.AnchorKeys;
 
-import java.lang.ref.WeakReference;
 import java.lang.reflect.Method;
 
 import io.github.libxposed.api.XposedModule;
@@ -36,38 +33,36 @@ import io.github.libxposed.api.XposedModule;
  */
 final class SplashAdHooks {
 
-    private static final String CLAZZ = "com.xingin.advert.spi.AdsIndexSpiImp";
-
-    private static final String[] VOID_ENTRIES = {
-            "openLCBSplashAdsV2",          // index 页 V2 / RN 开屏
-            "openLCBRedSplashAdsV2",       // 红 / CNY 开屏
-            "openLCBBrandMaxSplashAds",    // 品牌 Max
-            "openBrandMax",
-            "openNeedLazyHFSplashAds",     // 懒加载 HF 开屏（Dynamic/CNY/Stellar 分支）
+    /** Path A：首页 Controller 内嵌开屏的展示入口（全部必须拦）。 */
+    private static final String[] VOID_KEYS = {
+            AnchorKeys.SPLASH_OPEN_LCB_V2,          // index 页 V2 / RN 开屏
+            AnchorKeys.SPLASH_OPEN_LCB_RED_V2,      // 红 / CNY 开屏
+            AnchorKeys.SPLASH_OPEN_LCB_BRAND_MAX,   // 品牌 Max
+            AnchorKeys.SPLASH_OPEN_BRAND_MAX,
+            AnchorKeys.SPLASH_OPEN_LAZY_HF,         // 懒加载 HF 开屏
     };
 
     /** 类型 / UI 变体判定，不是展示总闸，置 false 只是辅助。 */
-    private static final String[] DECISIONS = {
-            "canLazyOpenSplash",
-            "canNeedNewCloser",
+    private static final String[] DECISION_KEYS = {
+            AnchorKeys.SPLASH_CAN_LAZY_OPEN,
+            AnchorKeys.SPLASH_CAN_NEED_NEW_CLOSER,
     };
-
-    /** Path B：独立全屏开屏 Activity 的生命周期回调（AdsActivityLifecycleCallback）。 */
-    private static final String LIFECYCLE_CB = "com.xingin.advert.intersitial.ui.a";
 
     /** Path B：四个全屏开屏 Activity 的 launcher（$a 内部类）。 */
-    private static final String[] FULLSCREEN_LAUNCHERS = {
-            "com.xingin.advert.intersitial.ui2.view.SplashAdActivity$a",
-            "com.xingin.advert.intersitial.ui2.view.dynamic.SplashDynamicActivity$a",
-            "com.xingin.advert.intersitial.ui2.cny.SplashCNYActivity$a",
-            "com.xingin.advert.intersitial.ui.InterstitialAdsActivity$a",
+    private static final String[] FULLSCREEN_KEYS = {
+            AnchorKeys.SPLASH_ACTIVITY_LAUNCHER,
+            AnchorKeys.SPLASH_DYNAMIC_LAUNCHER,
+            AnchorKeys.SPLASH_CNY_LAUNCHER,
+            AnchorKeys.SPLASH_INTERSTITIAL_LAUNCHER,
     };
 
-    /**
-     * Path C：冷启动占位 Fragment。SplashV2Controller.onAttach 在 coldStartMode==0 时
-     * replace 这个 Fragment 防白屏，它不是广告内容，但观感上算开屏画面。
-     */
-    private static final String PLACEHOLDER_VIEW = "com.xingin.advert.intersitial.ui.SplashAdPlaceHolderView";
+    /** 与 FULLSCREEN_KEYS 一一对应的诊断 label，保持旧日志里的类名。 */
+    private static final String[] FULLSCREEN_LABELS = {
+            "SplashAdActivity$a#a",
+            "SplashDynamicActivity$a#a",
+            "SplashCNYActivity$a#a",
+            "InterstitialAdsActivity$a#a",
+    };
 
     private SplashAdHooks() {
     }
@@ -87,43 +82,30 @@ final class SplashAdHooks {
 
     /** Path A：首页 Controller 内嵌 Fragment 开屏。 */
     private static void installEmbedded(XposedModule module, ClassLoader cl, Feature f) {
-        Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ, true);
-        if (cls == null) {
-            return;
+        for (String key : VOID_KEYS) {
+            Method m = HookKit.findAnchorMethod(module, f, cl, key, true);
+            HookKit.install(module, f, key, m, HookKit.skipVoid(module, f, key));
         }
-        for (String name : VOID_ENTRIES) {
-            Method m = HookKit.findMethod(module, f, cls, name);
-            HookKit.install(module, f, name, m, HookKit.skipVoid(module, f, name));
-        }
-        for (String name : DECISIONS) {
-            Method m = HookKit.findMethod(module, f, cls, name);
-            HookKit.install(module, f, name, m, HookKit.constBool(module, f, name, false));
+        for (String key : DECISION_KEYS) {
+            Method m = HookKit.findAnchorMethod(module, f, cl, key, true);
+            HookKit.install(module, f, key, m, HookKit.constBool(module, f, key, false));
         }
     }
 
     /** Path B：独立全屏开屏 Activity。 */
     private static void installFullScreen(XposedModule module, ClassLoader cl, Feature f) {
-        Class<?> cb = HookKit.findClass(module, f, cl, LIFECYCLE_CB, true);
-        if (cb != null) {
-            // d(WeakReference, SplashAd)：Path B 唯一出口，后面的 SplashAd 是混淆包内类型，
-            // 编译期拿不到 Class，用前导参数 WeakReference 定位。
-            Method d = HookKit.findByShape(cb, "d", WeakReference.class);
-            HookKit.install(module, f, "ui.a#d", d, HookKit.skipVoid(module, f, "ui.a#d"));
-        }
-        for (String name : FULLSCREEN_LAUNCHERS) {
-            Class<?> launcher = HookKit.findClass(module, f, cl, name);
-            if (launcher == null) {
+        // ui.a#d 是 Path B 唯一出口，签名中的 SplashAd 由 anchors.json 精确描述。
+        Method d = HookKit.findAnchorMethod(module, f, cl, AnchorKeys.SPLASH_FULLSCREEN_ENTRY, true);
+        HookKit.install(module, f, "ui.a#d", d, HookKit.skipVoid(module, f, "ui.a#d"));
+
+        for (int i = 0; i < FULLSCREEN_KEYS.length; i++) {
+            Method a = HookKit.findAnchorMethod(module, f, cl, FULLSCREEN_KEYS[i], false);
+            if (a == null) {
                 continue;
             }
-            Method a = HookKit.findByShape(launcher, "a", Context.class);
-            String label = shortName(name) + "#a";
+            String label = FULLSCREEN_LABELS[i];
             HookKit.install(module, f, label, a, HookKit.skipVoid(module, f, label));
         }
-    }
-
-    private static String shortName(String dotted) {
-        int i = dotted.lastIndexOf('.');
-        return i < 0 ? dotted : dotted.substring(i + 1);
     }
 
     /**
@@ -136,12 +118,7 @@ final class SplashAdHooks {
      * 直接返回一个空 View。类名是非混淆的语义名。
      */
     private static void installPlaceholder(XposedModule module, ClassLoader cl, Feature f) {
-        Class<?> cls = HookKit.findClass(module, f, cl, PLACEHOLDER_VIEW);
-        if (cls == null) {
-            return;
-        }
-        Method m = HookKit.findMethodQuiet(cls, "onCreateView",
-                LayoutInflater.class, ViewGroup.class, Bundle.class);
+        Method m = HookKit.anchorMethod(cl, AnchorKeys.SPLASH_PLACEHOLDER_VIEW);
         if (m == null) {
             HookKit.warn(module, f.id + " skip: SplashAdPlaceHolderView#onCreateView not found");
             return;

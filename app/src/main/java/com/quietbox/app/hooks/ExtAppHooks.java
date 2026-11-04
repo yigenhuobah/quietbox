@@ -1,10 +1,10 @@
 package com.quietbox.app.hooks;
 
-import android.content.Context;
 import android.net.Uri;
 
 import com.quietbox.app.Feature;
 import com.quietbox.app.HookState;
+import com.quietbox.app.anchor.AnchorKeys;
 
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -40,13 +40,11 @@ import io.github.libxposed.api.XposedModule;
  */
 final class ExtAppHooks {
 
-    private static final String CLAZZ = "com.xingin.advert.spi.AdvertSpiImpl";
-    private static final String METHOD = "gotoExtApp";
-
-    /** 广告落地页 WebView 三方 URL 的唯一汇聚点。9.52.0 为真实类名；9.51.0 为 k1e.i0，9.50.0 为 p0e.i0。 */
-    private static final String CONVERGE = "com.xingin.xywebview.util.XYWebViewUtil";
-
+    /** 宿主类名：纯判定函数（单测可直接调用）在锚点表不可用时按名字回退。 */
     private static final String EXT_WEBVIEW = "com.xingin.xywebview.activity.ExternalWebViewActivityV2";
+
+    /** 安装期解析出的 ExternalWebViewActivityV2；null 时回退到类名比较。 */
+    private static volatile Class<?> sExternalWebView;
 
     private ExtAppHooks() {
     }
@@ -54,20 +52,22 @@ final class ExtAppHooks {
     static void install(XposedModule module, ClassLoader cl) {
         Feature f = Feature.EXT_APP_BLOCK;
         try {
-            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ, true);
-            Method m = HookKit.findMethod(module, f, cls, METHOD);
-            HookKit.install(module, f, METHOD, m, HookKit.skipVoid(module, f, METHOD));
+            sExternalWebView = HookKit.findAnchorClass(module, f, cl,
+                    AnchorKeys.EXTERNAL_WEBVIEW, false);
 
-            Class<?> util = HookKit.findClass(module, f, cl, CONVERGE, true);
-            if (util != null) {
-                // b(Uri, Context, AdRedirectInfo, boolean, boolean)：后三参是混淆/实体类型，
-                // 用前导参数 (Uri, Context) 定位。9.52.0 该方法为 static。
-                // AD-04 只拦广告落地页：第 3 参必须是 AdRedirectInfo。形状不符宁可放弃
-                // 这个汇聚点（Path A 的 gotoExtApp 仍生效），也不退回「无广告信息也全拦」。
-                Method b = HookKit.findByShape(module, f, util, "b", Uri.class, Context.class);
-                if (b != null && hasAdRedirectInfoParam(b)) {
+            Method m = HookKit.findAnchorMethod(module, f, cl,
+                    AnchorKeys.EXT_APP_GOTO, true);
+            HookKit.install(module, f, "gotoExtApp", m, HookKit.skipVoid(module, f, "gotoExtApp"));
+
+            // b(Uri, Context, AdRedirectInfo, boolean, boolean)：第 3 参必须是 AdRedirectInfo。
+            // 形状不符宁可放弃这个汇聚点（Path A 的 gotoExtApp 仍生效），
+            // 也不退回「无广告信息也全拦」。
+            Method b = HookKit.findAnchorMethod(module, f, cl,
+                    AnchorKeys.EXT_APP_WEBVIEW_CONVERGE, false);
+            if (b != null) {
+                if (hasAdRedirectInfoParam(b)) {
                     HookKit.install(module, f, "XYWebViewUtil#b", b, convergeHook(module, f));
-                } else if (b != null) {
+                } else {
                     HookKit.warn(module, f.id
                             + " skip: XYWebViewUtil#b 第 3 参非 AdRedirectInfo，汇聚点不安装");
                     HookState.note(f, "XYWebViewUtil#b 形状不符，未安装");
@@ -121,8 +121,9 @@ final class ExtAppHooks {
     }
 
     private static boolean isExternalWebView(Class<?> cls) {
+        Class<?> anchor = sExternalWebView;
         for (Class<?> c = cls; c != null; c = c.getSuperclass()) {
-            if (EXT_WEBVIEW.equals(c.getName())) {
+            if (anchor != null ? c == anchor : EXT_WEBVIEW.equals(c.getName())) {
                 return true;
             }
         }

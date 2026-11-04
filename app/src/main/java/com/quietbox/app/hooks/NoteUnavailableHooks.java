@@ -2,6 +2,7 @@ package com.quietbox.app.hooks;
 
 import com.quietbox.app.Feature;
 import com.quietbox.app.HookState;
+import com.quietbox.app.anchor.AnchorKeys;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -36,8 +37,7 @@ import io.github.libxposed.api.XposedModule;
  */
 final class NoteUnavailableHooks {
 
-    /** 混淆 lambda：NoteDetailRepository 的 map 阶段。9.52.0 为 yr7.o；9.51.0 为 sr9.o。 */
-    private static final String LAMBDA = "yr7.o";
+    /** 混淆 lambda：NoteDetailRepository 的 map 阶段（锚点 yr7.o#invoke）。 */
     private static final String REPO = "com.xingin.matrix.notedetail.v3.repo.NoteDetailRepository";
     private static final String HOLDER = "com.xingin.notebase.entities.notedetail.DetailNoteFeedHolder";
     private static final String FEED = "com.xingin.entities.notedetail.NoteFeed";
@@ -52,11 +52,8 @@ final class NoteUnavailableHooks {
     static void install(XposedModule module, ClassLoader cl) {
         Feature f = Feature.NOTE_UNAVAILABLE_VIEW;
         try {
-            Class<?> lambda = HookKit.findClass(module, f, cl, LAMBDA, true);
-            if (lambda == null) {
-                return;
-            }
-            Method invoke = HookKit.findByNameAndArity(lambda, "invoke", 1);
+            Method invoke = HookKit.findAnchorMethod(module, f, cl,
+                    AnchorKeys.NOTE_UNAVAILABLE_MAP_INVOKE, true);
             HookKit.install(module, f, "NoteDetailRepository#map", invoke, hook(module, f),
                     XposedInterface.ExceptionMode.PASSTHROUGH);
             HookState.note(f, "服务端返回 error 页时改用本地数据/离线路径");

@@ -2,6 +2,7 @@ package com.quietbox.app.hooks;
 
 import com.quietbox.app.Feature;
 import com.quietbox.app.HookState;
+import com.quietbox.app.anchor.AnchorKeys;
 
 import java.lang.reflect.Method;
 
@@ -26,13 +27,6 @@ import io.github.libxposed.api.XposedModule;
  */
 final class ForceSaveHooks {
 
-    /** 旧门：disable_save getter。9.50/9.52 方法表均为 a,b,c（b=disable_save）。 */
-    private static final String SAVE_CONFIG_CLAZZ = "com.xingin.entities.MediaSaveConfig";
-
-    /** 新门：权限数组元素。a()=enable、b()=reason、c()=type。 */
-    private static final String FUNCTION_SWITCH_CLAZZ =
-            "com.xingin.entities.notedetail.FunctionSwitch";
-
     static final String TYPE_IMAGE_DOWNLOAD = "image_download";
     static final String TYPE_VIDEO_DOWNLOAD = "video_download";
 
@@ -53,7 +47,10 @@ final class ForceSaveHooks {
 
         // 门 1：MediaSaveConfig.b() -> false（主门，缺失即功能不可用）。
         try {
-            Class<?> cls = HookKit.findClass(module, f, cl, SAVE_CONFIG_CLAZZ, true);
+            // 类锚点来自 anchors.json；b() 本身不在 check-mounts 的 64 项清单里，
+            // 仍按方法名解析（待 check-mounts 清单补项后可迁移为方法锚点）。
+            Class<?> cls = HookKit.findAnchorClass(module, f, cl,
+                    AnchorKeys.MEDIA_SAVE_CONFIG, true);
             if (cls != null) {
                 Method m = HookKit.findMethodQuiet(module, f, cls, "b");
                 if (m != null && HookKit.install(module, f, "MediaSaveConfig#b(allow-save)", m,
@@ -67,34 +64,33 @@ final class ForceSaveHooks {
 
         // 门 2：FunctionSwitch.a() -> true，仅 image_download / video_download。
         try {
-            Class<?> cls = HookKit.findClass(module, f, cl, FUNCTION_SWITCH_CLAZZ, false);
-            if (cls != null) {
-                Method enable = HookKit.findMethodQuiet(module, f, cls, "a");
-                Method type = HookKit.findMethodQuiet(module, f, cls, "c");
-                if (enable != null && type != null) {
-                    final Method typeGetter = type;
-                    boolean ok = HookKit.install(module, f, "FunctionSwitch#a(enable-download)",
-                            enable, chain -> {
-                                Object original = chain.proceed();
-                                try {
-                                    Object self = chain.getThisObject();
-                                    if (self != null) {
-                                        Object typeValue = typeGetter.invoke(self);
-                                        if (typeValue instanceof String
-                                                && shouldForceEnable((String) typeValue)) {
-                                            HookKit.hit(module, f,
-                                                    "FunctionSwitch#a:" + typeValue);
-                                            return Boolean.TRUE;
-                                        }
+            Method enable = HookKit.findAnchorMethod(module, f, cl,
+                    AnchorKeys.FORCE_SAVE_FUNCTION_ENABLE, true);
+            Method type = HookKit.findAnchorMethod(module, f, cl,
+                    AnchorKeys.FORCE_SAVE_FUNCTION_TYPE, true);
+            if (enable != null && type != null) {
+                final Method typeGetter = type;
+                boolean ok = HookKit.install(module, f, "FunctionSwitch#a(enable-download)",
+                        enable, chain -> {
+                            Object original = chain.proceed();
+                            try {
+                                Object self = chain.getThisObject();
+                                if (self != null) {
+                                    Object typeValue = typeGetter.invoke(self);
+                                    if (typeValue instanceof String
+                                            && shouldForceEnable((String) typeValue)) {
+                                        HookKit.hit(module, f,
+                                                "FunctionSwitch#a:" + typeValue);
+                                        return Boolean.TRUE;
                                     }
-                                } catch (Throwable t) {
-                                    HookKit.error(module, f.id + " FunctionSwitch#a error", t);
                                 }
-                                return original;
-                            });
-                    if (ok) {
-                        installed++;
-                    }
+                            } catch (Throwable t) {
+                                HookKit.error(module, f.id + " FunctionSwitch#a error", t);
+                            }
+                            return original;
+                        });
+                if (ok) {
+                    installed++;
                 }
             }
         } catch (Throwable t) {

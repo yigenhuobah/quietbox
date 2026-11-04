@@ -2,6 +2,7 @@ package com.quietbox.app.hooks;
 
 import com.quietbox.app.Feature;
 import com.quietbox.app.HookState;
+import com.quietbox.app.anchor.AnchorKeys;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -41,16 +42,6 @@ import io.github.libxposed.api.XposedModule;
  */
 final class FeedAdHooks {
 
-    private static final String SERVICE_CLAZZ = "com.xingin.advert.spi.AdsHomeFeedManagerServiceImpl";
-    private static final String RECORD_METHOD = "recordAdsNoteData";
-    private static final String HANDLE_METHOD = "handleFeedDataIfNeed";
-
-    /** 首页信息流视图：追加/刷新/插入。9.52.0 恢复为真实类名；9.51.0 为 l8d.m0。 */
-    private static final String FEED_LIST =
-            "com.xingin.xhs.homepage.explorefeed.mainfeed.view.ExploreView";
-    /** 分页上游（混淆类）。9.52.0 为 vha.s；9.51.0 为 g8d.s。 */
-    private static final String FEED_PAGER = "vha.s";
-
     /** 按 NoteItemBean 子类缓存 isAd 字段；找不到时缓存 null 避免反复反射。 */
     private static final Map<Class<?>, Field> IS_AD = new HashMap<>();
 
@@ -74,18 +65,18 @@ final class FeedAdHooks {
 
     /** 开屏关联的第 2 位广告：客户端自己插的那一种。 */
     private static void installTwoPosition(XposedModule module, ClassLoader cl, Feature f) {
-        Class<?> service = HookKit.findClass(module, f, cl, SERVICE_CLAZZ, true);
-        if (service == null) {
-            return;
-        }
-        Method handle = HookKit.findMethodQuiet(service, HANDLE_METHOD, java.util.ArrayList.class, String.class);
-        HookKit.install(module, f, HANDLE_METHOD, handle, HookKit.skipVoid(module, f, HANDLE_METHOD));
+        Method handle = HookKit.findAnchorMethod(module, f, cl,
+                AnchorKeys.FEED_AD_HANDLE_IF_NEED, true);
+        HookKit.install(module, f, "handleFeedDataIfNeed", handle,
+                HookKit.skipVoid(module, f, "handleFeedDataIfNeed"));
 
-        Method record = HookKit.findByNameAndArity(service, RECORD_METHOD, 2);
-        HookKit.install(module, f, RECORD_METHOD, record, HookKit.skipVoid(module, f, RECORD_METHOD));
+        Method record = HookKit.findAnchorMethod(module, f, cl,
+                AnchorKeys.FEED_AD_RECORD_NOTE, true);
+        HookKit.install(module, f, "recordAdsNoteData", record,
+                HookKit.skipVoid(module, f, "recordAdsNoteData"));
 
-        Class<?> feed = HookKit.findClass(module, f, cl, FEED_LIST, true);
-        Method insert = HookKit.findByNameAndArity(feed, "g0", 2);
+        Method insert = HookKit.findAnchorMethod(module, f, cl,
+                AnchorKeys.FEED_AD_INSERT_GUARD, true);
         HookKit.install(module, f, "ExploreView.g0", insert, new XposedInterface.Hooker() {
             @Override
             public Object intercept(XposedInterface.Chain chain) throws Throwable {
@@ -105,20 +96,17 @@ final class FeedAdHooks {
 
     /** 普通信息流广告：服务端下发 isAd，只能在列表层过滤。 */
     private static void installListFilter(XposedModule module, ClassLoader cl, Feature f) {
-        Class<?> feed = HookKit.findClass(module, f, cl, FEED_LIST, true);
-        if (feed != null) {
-            HookKit.install(module, f, "ExploreView.S", HookKit.findByNameAndArity(feed, "S", 1),
-                    dropAdsHook(module, f, "ExploreView.S", 0));
-            HookKit.install(module, f, "ExploreView.C0", HookKit.findByNameAndArity(feed, "C0", 2),
-                    dropAdsHook(module, f, "ExploreView.C0", 0));
-        }
-        Class<?> pager = HookKit.findClass(module, f, cl, FEED_PAGER);
-        if (pager != null) {
-            // Pd(boolean isRefresh, ArrayList pageData, 回调)：9.51.0 起列表从参数 0 移到参数 1
-            // （参数 0 变成 isRefresh 布尔），列表经回调 onSuccess 交给 ExploreView.C0。
-            HookKit.install(module, f, "vha.s.Pd", HookKit.findByNameAndArity(pager, "Pd", 3),
-                    dropAdsHook(module, f, "vha.s.Pd", 1));
-        }
+        HookKit.install(module, f, "ExploreView.S",
+                HookKit.findAnchorMethod(module, f, cl, AnchorKeys.FEED_AD_APPEND_FILTER, true),
+                dropAdsHook(module, f, "ExploreView.S", 0));
+        HookKit.install(module, f, "ExploreView.C0",
+                HookKit.findAnchorMethod(module, f, cl, AnchorKeys.FEED_AD_REFRESH_FILTER, true),
+                dropAdsHook(module, f, "ExploreView.C0", 0));
+        // Pd(boolean isRefresh, ArrayList pageData, 回调)：9.51.0 起列表从参数 0 移到参数 1
+        // （参数 0 变成 isRefresh 布尔），列表经回调 onSuccess 交给 ExploreView.C0。
+        HookKit.install(module, f, "vha.s.Pd",
+                HookKit.findAnchorMethod(module, f, cl, AnchorKeys.FEED_AD_PAGER_FILTER, true),
+                dropAdsHook(module, f, "vha.s.Pd", 1));
     }
 
     /** 在调用原方法前，把入参 List 里的广告项删掉。 */

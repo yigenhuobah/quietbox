@@ -11,9 +11,9 @@ import com.quietbox.app.AbTests;
 import com.quietbox.app.Config;
 import com.quietbox.app.Feature;
 import com.quietbox.app.HookState;
+import com.quietbox.app.anchor.AnchorKeys;
 
 import java.lang.reflect.Method;
-import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -50,31 +50,22 @@ import io.github.libxposed.api.XposedModule;
 public final class AbTestHooks {
 
     private static final String TAG = "QuietBox";
-    /** 9.52.0 恢复真实类名；9.51.0 为 tq.h。 */
-    private static final String AB_STORE = "com.xingin.abtest.impl.XYExperimentImpl";
-    /** 9.52.0 恢复真实类名；9.51.0 为 mb6.o，9.50.0 为 eb6.o。 */
-    private static final String CONFIG_CENTER = "com.xingin.configcenter.XYConfigCenterImpl";
-
     private AbTestHooks() {
     }
 
     static void install(XposedModule module, ClassLoader cl) {
         Feature f = Feature.AB_TEST_PANEL;
         try {
-            Class<?> store = HookKit.findClass(module, f, cl, AB_STORE, true);
-            if (store != null) {
-                for (String name : new String[]{"f", "b"}) {
-                    Method m = HookKit.findMethodInHierarchy(module, f, store, name,
-                            String.class, Type.class, Object.class);
-                    HookKit.install(module, f, "ABStore#" + name, m, valueHook(module, f));
-                }
+            for (String key : new String[]{
+                    AnchorKeys.AB_GET_VALUE_ONCE, AnchorKeys.AB_GET_VALUE}) {
+                Method m = HookKit.findAnchorMethod(module, f, cl, key, true);
+                HookKit.install(module, f, "ABStore#" + key, m, valueHook(module, f));
             }
 
-            Class<?> center = HookKit.findClass(module, f, cl, CONFIG_CENTER, true);
-            if (center != null) {
-                Method m = HookKit.findMethodInHierarchy(module, f, center, "l", String.class);
-                HookKit.install(module, f, "ConfigCenter#l", m, stringHook(module, f));
-            }
+            HookKit.install(module, f, "ConfigCenter#l",
+                    HookKit.findAnchorMethod(module, f, cl,
+                            AnchorKeys.CONFIG_CENTER_GET_VALUE, true),
+                    stringHook(module, f));
 
             installContextCapture(module, cl, f);
             AbRuntime.start(module);

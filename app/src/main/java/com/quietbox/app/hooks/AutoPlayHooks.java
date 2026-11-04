@@ -2,6 +2,7 @@ package com.quietbox.app.hooks;
 
 import com.quietbox.app.Feature;
 import com.quietbox.app.HookState;
+import com.quietbox.app.anchor.AnchorKeys;
 
 import io.github.libxposed.api.XposedModule;
 
@@ -18,9 +19,12 @@ import io.github.libxposed.api.XposedModule;
  */
 final class AutoPlayHooks {
 
-    private static final String DETAIL = "com.xingin.detailfeed.services.autoscroll.AutoScrollStateHelper";
-    private static final String TAB = "com.xingin.detailfeed.services.autoscroll.AutoScrollStateTabHelper";
-    private static final String[] METHODS = {"isAutoPlayOpen", "isAutoPlayOpenServer"};
+    private static final String[] KEYS = {
+            AnchorKeys.AUTOPLAY_DETAIL_OPEN,
+            AnchorKeys.AUTOPLAY_DETAIL_SERVER,
+            AnchorKeys.AUTOPLAY_TAB_OPEN,
+            AnchorKeys.AUTOPLAY_TAB_SERVER,
+    };
 
     private AutoPlayHooks() {
     }
@@ -28,13 +32,10 @@ final class AutoPlayHooks {
     static void install(XposedModule module, ClassLoader cl) {
         Feature f = Feature.AUTOPLAY_PREFERENCE;
         try {
-            for (String clazz : new String[]{DETAIL, TAB}) {
-                Class<?> cls = HookKit.findClass(module, f, cl, clazz, true);
-                for (String name : METHODS) {
-                    HookKit.install(module, f, shortName(clazz) + "#" + name,
-                            HookKit.findMethod(module, f, cls, name),
-                            HookKit.constBool(module, f, shortName(clazz) + "#" + name, false));
-                }
+            for (String key : KEYS) {
+                HookKit.install(module, f, key,
+                        HookKit.findAnchorMethod(module, f, cl, key, true),
+                        HookKit.constBool(module, f, key, false));
             }
             HookState.note(f, "仅自动播放；画质偏好在可读源码中无可确认的消费方，未实现");
         } catch (Throwable t) {
@@ -43,8 +44,4 @@ final class AutoPlayHooks {
         }
     }
 
-    private static String shortName(String clazz) {
-        int i = clazz.lastIndexOf('.');
-        return i < 0 ? clazz : clazz.substring(i + 1);
-    }
 }

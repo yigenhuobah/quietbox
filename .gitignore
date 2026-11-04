@@ -34,3 +34,6 @@ docs/
 
 # 发布说明/本地产物
 dist/
+
+# Python cache
+__pycache__/

@@ -1,8 +1,7 @@
 package com.quietbox.app.hooks;
 
 import com.quietbox.app.Feature;
-
-import java.lang.reflect.Method;
+import com.quietbox.app.anchor.AnchorKeys;
 
 import io.github.libxposed.api.XposedModule;
 
@@ -14,18 +13,15 @@ import io.github.libxposed.api.XposedModule;
  */
 final class GoodsCommentHooks {
 
-    private static final String CLAZZ =
-            "com.xingin.commercial.vision.post.spi.GoodsCommentAddInProcessor";
-
     private GoodsCommentHooks() {
     }
 
     static void install(XposedModule module, ClassLoader cl) {
         Feature f = Feature.GOODS_COMMENT_BLOCK;
         try {
-            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ, true);
             HookKit.install(module, f, "startAddIn",
-                    HookKit.findByNameAndArity(cls, "startAddIn", 5),
+                    HookKit.findAnchorMethod(module, f, cl,
+                            AnchorKeys.GOODS_COMMENT_START_ADD_IN, true),
                     HookKit.skipVoid(module, f, "startAddIn"));
         } catch (Throwable t) {
             HookKit.error(module, f.id + " install aborted", t);

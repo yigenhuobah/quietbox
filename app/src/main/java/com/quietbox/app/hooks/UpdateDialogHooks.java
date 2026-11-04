@@ -1,9 +1,9 @@
 package com.quietbox.app.hooks;
 
 import android.app.Activity;
-import android.os.Bundle;
 
 import com.quietbox.app.Feature;
+import com.quietbox.app.anchor.AnchorKeys;
 
 import java.lang.reflect.Method;
 
@@ -18,16 +18,14 @@ import io.github.libxposed.api.XposedModule;
  */
 final class UpdateDialogHooks {
 
-    private static final String CLAZZ = "com.xingin.update.UpdateDialogActivity";
-
     private UpdateDialogHooks() {
     }
 
     static void install(XposedModule module, ClassLoader cl) {
         Feature f = Feature.UPDATE_DIALOG_BLOCK;
         try {
-            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ, true);
-            Method onCreate = HookKit.findMethod(module, f, cls, "onCreate", Bundle.class);
+            Method onCreate = HookKit.findAnchorMethod(module, f, cl,
+                    AnchorKeys.UPDATE_DIALOG_ON_CREATE, true);
             HookKit.install(module, f, "onCreate", onCreate, new XposedInterface.Hooker() {
                 @Override
                 public Object intercept(XposedInterface.Chain chain) throws Throwable {
@@ -43,7 +41,8 @@ final class UpdateDialogHooks {
                     return chain.proceed();
                 }
             });
-            Method he = HookKit.findMethod(module, f, cls, "he");
+            Method he = HookKit.findAnchorMethod(module, f, cl,
+                    AnchorKeys.UPDATE_DIALOG_HE, true);
             HookKit.install(module, f, "he", he, HookKit.skipVoid(module, f, "he"));
         } catch (Throwable t) {
             HookKit.error(module, f.id + " install aborted", t);

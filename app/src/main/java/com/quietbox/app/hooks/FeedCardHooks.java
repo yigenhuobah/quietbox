@@ -3,6 +3,7 @@ package com.quietbox.app.hooks;
 import com.quietbox.app.Config;
 import com.quietbox.app.Feature;
 import com.quietbox.app.HookState;
+import com.quietbox.app.anchor.AnchorKeys;
 
 import java.lang.reflect.Field;
 import java.util.HashMap;
@@ -30,12 +31,6 @@ import io.github.libxposed.api.XposedModule;
  * 注意：只挂首页信息流的 S/C0/Pd 路径（已验证调用面），不碰详情连播链路。
  */
 final class FeedCardHooks {
-
-    /** 首页信息流视图：追加/刷新/插入。9.52.0 恢复为真实类名；9.51.0 为 l8d.m0。 */
-    private static final String FEED_LIST =
-            "com.xingin.xhs.homepage.explorefeed.mainfeed.view.ExploreView";
-    /** 分页上游（混淆类）。9.52.0 为 vha.s；9.51.0 为 g8d.s。 */
-    private static final String FEED_PAGER = "vha.s";
 
     /** NoteItemBean.modelType 字段缓存；null 表示该类没有这个字段。 */
     private static final Map<Class<?>, Field> MODEL_TYPE = new HashMap<>();
@@ -75,22 +70,19 @@ final class FeedCardHooks {
 
     private static void installOne(XposedModule module, ClassLoader cl, Feature f, String kind) {
         try {
-            Class<?> feed = HookKit.findClass(module, f, cl, FEED_LIST, true);
-            if (feed != null) {
-                HookKit.install(module, f, "ExploreView.S",
-                        HookKit.findByNameAndArity(feed, "S", 1),
-                        dropHook(module, f, "ExploreView.S", 0, kind));
-                HookKit.install(module, f, "ExploreView.C0",
-                        HookKit.findByNameAndArity(feed, "C0", 2),
-                        dropHook(module, f, "ExploreView.C0", 0, kind));
-            }
-            Class<?> pager = HookKit.findClass(module, f, cl, FEED_PAGER);
-            if (pager != null) {
-                // 9.51.0 起 Pd 的列表参数从 0 移到 1（参数 0 变成 isRefresh），见 FeedAdHooks。
-                HookKit.install(module, f, "vha.s.Pd",
-                        HookKit.findByNameAndArity(pager, "Pd", 3),
-                        dropHook(module, f, "vha.s.Pd", 1, kind));
-            }
+            HookKit.install(module, f, "ExploreView.S",
+                    HookKit.findAnchorMethod(module, f, cl,
+                            AnchorKeys.FEED_CARD_APPEND_FILTER, true),
+                    dropHook(module, f, "ExploreView.S", 0, kind));
+            HookKit.install(module, f, "ExploreView.C0",
+                    HookKit.findAnchorMethod(module, f, cl,
+                            AnchorKeys.FEED_CARD_REFRESH_FILTER, true),
+                    dropHook(module, f, "ExploreView.C0", 0, kind));
+            // 9.51.0 起 Pd 的列表参数从 0 移到 1（参数 0 变成 isRefresh），见 FeedAdHooks。
+            HookKit.install(module, f, "vha.s.Pd",
+                    HookKit.findAnchorMethod(module, f, cl,
+                            AnchorKeys.FEED_CARD_PAGER_FILTER, true),
+                    dropHook(module, f, "vha.s.Pd", 1, kind));
         } catch (Throwable t) {
             HookKit.error(module, f.id + " install aborted", t);
         }

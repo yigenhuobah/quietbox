@@ -1,6 +1,7 @@
 package com.quietbox.app.hooks;
 
 import com.quietbox.app.Feature;
+import com.quietbox.app.anchor.AnchorKeys;
 
 import java.lang.reflect.Method;
 
@@ -13,18 +14,16 @@ import io.github.libxposed.api.XposedModule;
  */
 final class CommentAdHooks {
 
-    private static final String CLAZZ = "com.xingin.advert.spi.AdsCommentComponentBinderCreatorImpl";
-    private static final String METHOD = "commentAdvertComponentDSLEnable";
-
     private CommentAdHooks() {
     }
 
     static void install(XposedModule module, ClassLoader cl) {
         Feature f = Feature.COMMENT_AD_FILTER;
         try {
-            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ, true);
-            Method m = HookKit.findMethod(module, f, cls, METHOD);
-            HookKit.install(module, f, METHOD, m, HookKit.constBool(module, f, METHOD, false));
+            Method m = HookKit.findAnchorMethod(module, f, cl,
+                    AnchorKeys.COMMENT_AD_DSL_ENABLE, true);
+            HookKit.install(module, f, "commentAdvertComponentDSLEnable", m,
+                    HookKit.constBool(module, f, "commentAdvertComponentDSLEnable", false));
         } catch (Throwable t) {
             HookKit.error(module, f.id + " install aborted", t);
         }

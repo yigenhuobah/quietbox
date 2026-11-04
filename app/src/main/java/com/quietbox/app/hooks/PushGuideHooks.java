@@ -1,6 +1,7 @@
 package com.quietbox.app.hooks;
 
 import com.quietbox.app.Feature;
+import com.quietbox.app.anchor.AnchorKeys;
 
 import java.lang.reflect.Method;
 
@@ -14,14 +15,12 @@ import io.github.libxposed.api.XposedModule;
  */
 final class PushGuideHooks {
 
-    private static final String CLAZZ = "com.xingin.spi.IGrowthCupidProxyImpl";
-
     /** 只拦展示入口，不碰授权回执。 */
-    private static final String[] SHOW_METHODS = {
-            "pushGuideDialogDialogShow",
-            "showGuidePopupWindow",
-            "showPushGuidShowForInside",
-            "openPushGuideActivity",
+    private static final String[] SHOW_KEYS = {
+            AnchorKeys.PUSH_GUIDE_DIALOG,
+            AnchorKeys.PUSH_GUIDE_POPUP,
+            AnchorKeys.PUSH_GUIDE_INSIDE,
+            AnchorKeys.PUSH_GUIDE_ACTIVITY,
     };
 
     private PushGuideHooks() {
@@ -30,12 +29,10 @@ final class PushGuideHooks {
     static void install(XposedModule module, ClassLoader cl) {
         Feature f = Feature.PUSH_GUIDE_BLOCK;
         try {
-            Class<?> cls = HookKit.findClass(module, f, cl, CLAZZ, true);
-            for (String name : SHOW_METHODS) {
-                Method m = HookKit.findMethod(module, f, cls, name);
+            for (String key : SHOW_KEYS) {
+                Method m = HookKit.findAnchorMethod(module, f, cl, key, true);
                 if (m != null) {
-                    HookKit.install(module, f, name, m,
-                            HookKit.skipVoid(module, f, name));
+                    HookKit.install(module, f, key, m, HookKit.skipVoid(module, f, key));
                 }
             }
         } catch (Throwable t) {
