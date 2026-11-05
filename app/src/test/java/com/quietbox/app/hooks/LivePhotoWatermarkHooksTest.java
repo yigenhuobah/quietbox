@@ -12,15 +12,15 @@ import java.lang.reflect.Modifier;
 /**
  * LivePhotoWatermarkHooks 纯函数的 JVM 单测。
  *
- * dexsql 对 9.52.0 的结论（见 LivePhotoWatermarkHooks 类注释）：
- * zm7.j#c(pr7.l, dg7.h, Z)V 是实况保存入口；dg7.h 的字段 e=disableWaterMark、
- * h=disableAiWaterMark（公开 boolean 字段）；p32.h#a(I)Z 的 code=1 是实况保存
- * 链路开关（zm7.j#c 内 const 1 传入），true=新链路（服务端渲染，可能带烧录水印）、
- * false=旧链路（直接下载 dg7.h.g 预览同源 URL）。
+ * dexsql 对 9.52.1 的结论（见 LivePhotoWatermarkHooks 类注释）：
+ * ss9.j#c(ny9.m, cl9.i, Z)V 是实况保存入口；cl9.i 的字段 e=disableWaterMark、
+ * h=disableAiWaterMark（公开 boolean 字段）；wk2.h#a(I)Z 的 code=1 是实况保存
+ * 链路开关（ss9.j#c 内 const 1 传入），true=新链路（服务端渲染，可能带烧录水印）、
+ * false=旧链路（直接下载 cl9.i.g 预览同源 URL）。9.52.0 对应 zm7.j / dg7.h / p32.h。
  */
 public class LivePhotoWatermarkHooksTest {
 
-    /** 字段形状与 9.52.0 dg7.h 相同的替身：a~d=String、e=Z、f=String、g=String、h=Z。 */
+    /** 字段形状与 9.52.1 cl9.i 相同的替身：a~d=String、e=Z、f=String、g=String、h=Z。 */
     static class Feedback {
         public String a = "a";
         public String b = "b";

@@ -19,8 +19,8 @@ import io.github.libxposed.api.XposedModule;
  * 首屏已有的数据，只有服务端明确返回「错误页」模型时才把内容换掉。
  *
  * 服务端的错误页是 NoteFeed.modelType == "error"（资源字符串「当前内容无法展示」
- * 就是它的错误页）。NoteDetailRepository 的 map 阶段（混淆 lambda yr7.o，
- * 9.51.0 为 sr9.o，9.50.0 为 dr9.o，由 NoteDetailRepository.k 直接构造）会把这个
+ * 就是它的错误页）。NoteDetailRepository 的 map 阶段（9.52.1 混淆 lambda 为 rz9.o，
+ * 9.52.0 为 yr7.o，9.51.0 为 sr9.o，9.50.0 为 dr9.o，由 NoteDetailRepository.k 直接构造）会把这个
  * 错误页包装成 DetailNoteFeedHolder 交给 UI。
  *
  * 9.52.0 起 NoteFeed 的混淆 getter 被 R8 重新分配（c1 变成返回 LiveShootingInfo，
@@ -37,7 +37,7 @@ import io.github.libxposed.api.XposedModule;
  */
 final class NoteUnavailableHooks {
 
-    /** 混淆 lambda：NoteDetailRepository 的 map 阶段（锚点 yr7.o#invoke）。 */
+    /** 混淆 lambda：NoteDetailRepository 的 map 阶段（锚点 rz9.o#invoke）。 */
     private static final String REPO = "com.xingin.matrix.notedetail.v3.repo.NoteDetailRepository";
     private static final String HOLDER = "com.xingin.notebase.entities.notedetail.DetailNoteFeedHolder";
     private static final String FEED = "com.xingin.entities.notedetail.NoteFeed";

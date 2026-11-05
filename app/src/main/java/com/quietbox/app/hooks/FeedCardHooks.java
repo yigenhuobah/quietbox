@@ -19,7 +19,8 @@ import io.github.libxposed.api.XposedModule;
 /**
  * AD-08/09/10 信息流直播卡、带货卡、投票卡过滤。
  *
- * 复用 AD-02 已验证的列表过滤链路（9.52.0 为 ExploreView#S/#C0、vha/s#Pd；
+ * 复用 AD-02 已验证的列表过滤链路（9.52.1 为 nfd.m0#S/#C0、ifd/s#Pd；
+ * 9.52.0 为 ExploreView#S/#C0、vha/s#Pd；
  * 9.51.0 为 l8d/m0#Q、#A0、g8d/s#Yd，见 FeedAdHooks），
  * 只动列表内容、不动游标，分页不受影响。三个功能各挂各的谓词，互不依赖。
  *
@@ -70,19 +71,19 @@ final class FeedCardHooks {
 
     private static void installOne(XposedModule module, ClassLoader cl, Feature f, String kind) {
         try {
-            HookKit.install(module, f, "ExploreView.S",
+            HookKit.install(module, f, "nfd.m0.S",
                     HookKit.findAnchorMethod(module, f, cl,
                             AnchorKeys.FEED_CARD_APPEND_FILTER, true),
-                    dropHook(module, f, "ExploreView.S", 0, kind));
-            HookKit.install(module, f, "ExploreView.C0",
+                    dropHook(module, f, "nfd.m0.S", 0, kind));
+            HookKit.install(module, f, "nfd.m0.C0",
                     HookKit.findAnchorMethod(module, f, cl,
                             AnchorKeys.FEED_CARD_REFRESH_FILTER, true),
-                    dropHook(module, f, "ExploreView.C0", 0, kind));
+                    dropHook(module, f, "nfd.m0.C0", 0, kind));
             // 9.51.0 起 Pd 的列表参数从 0 移到 1（参数 0 变成 isRefresh），见 FeedAdHooks。
-            HookKit.install(module, f, "vha.s.Pd",
+            HookKit.install(module, f, "ifd.s.Pd",
                     HookKit.findAnchorMethod(module, f, cl,
                             AnchorKeys.FEED_CARD_PAGER_FILTER, true),
-                    dropHook(module, f, "vha.s.Pd", 1, kind));
+                    dropHook(module, f, "ifd.s.Pd", 1, kind));
         } catch (Throwable t) {
             HookKit.error(module, f.id + " install aborted", t);
         }

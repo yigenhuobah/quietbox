@@ -17,26 +17,26 @@ import io.github.libxposed.api.XposedModule;
 /**
  * AD-02 信息流广告过滤。
  *
- * 9.52.0 的信息流广告有两种来源（2026-10-29 DexSQL 复核；9.51.0 为 l8d.m0/g8d.s，
- * 9.50.0 为 r7d.m0/m7d.s）：
+ * 9.52.1 的信息流广告有两种来源（2026-11-05 DexSQL 复核；9.52.1 为 nfd.m0/ifd.s，
+ * 9.52.0 为 ExploreView/vha.s，9.51.0 为 l8d.m0/g8d.s，9.50.0 为 r7d.m0/m7d.s）：
  *
  * 1) 开屏关联的首页第 2 位广告（2-pos）：客户端自己插，链路是
  *    AdsHomeFeedManagerServiceImpl.handleFeedDataIfNeed → recordAdsNoteData
- *    → … → ExploreView.g0 插入。这一种旧 hook（只跳 handleFeedDataIfNeed）能覆盖。
+ *    → … → nfd.m0.g0 插入。这一种旧 hook（只跳 handleFeedDataIfNeed）能覆盖。
  *
  * 2) **普通信息流广告**：服务端直接下发 NoteItemBean.isAd=true，客户端没有"插入广告"
  *    的方法可拦，只能在列表层过滤。旧 hook 对这类完全无效。
  *
  * 本类两层都做：
- * - 2-pos：跳 handleFeedDataIfNeed + recordAdsNoteData，并守卫 ExploreView.g0。
- * - 普通广告：在 ExploreView.S / ExploreView.C0 / vha.s.Pd 调用原方法前，从入参
+ * - 2-pos：跳 handleFeedDataIfNeed + recordAdsNoteData，并守卫 nfd.m0.g0。
+ * - 普通广告：在 nfd.m0.S / nfd.m0.C0 / ifd.s.Pd 调用原方法前，从入参
  *   ArrayList 移除 isAd==true 的项。只动列表内容，不动游标，分页不受影响。
  *
- * 9.52.0 方法名映射（同一方法体、同一签名形状，DexSQL 反汇编比对）：
- *   l8d/m0#Q  → ExploreView#S   （日志 "appendResponseNoteWithCache"）
- *   l8d/m0#A0 → ExploreView#C0  （日志 "showRefreshNoteList"）
- *   l8d/m0#e0 → ExploreView#g0  （插入动画，调用 getRecyclerView）
- *   g8d/s#Yd  → vha/s#Pd        （Z, ArrayList, 回调 三参不变）
+ * 9.51.0 → 9.52.0/9.52.1 方法名映射（同一方法体、同一签名形状，DexSQL 反汇编比对）：
+ *   l8d/m0#Q  → nfd.m0#S   （日志 "appendResponseNoteWithCache"；9.52.0 为 ExploreView#S）
+ *   l8d/m0#A0 → nfd.m0#C0  （日志 "showRefreshNoteList"；9.52.0 为 ExploreView#C0）
+ *   l8d/m0#e0 → nfd.m0#g0  （插入动画，调用 getRecyclerView；9.52.0 为 ExploreView#g0）
+ *   g8d/s#Yd  → ifd/s#Pd   （Z, ArrayList, 回调 三参不变；9.52.0 为 vha/s#Pd）
  *
  * isAd 是 NoteItemBean 的**字段**（不是 getter）：Lcom/xingin/entities/NoteItemBean;->isAd:Z。
  */
@@ -56,7 +56,7 @@ final class FeedAdHooks {
         try {
             installTwoPosition(module, cl, f);
             installListFilter(module, cl, f);
-            HookState.note(f, "2-pos（handleFeedDataIfNeed/recordAdsNoteData/ExploreView.g0）+ 普通广告列表过滤（ExploreView.S/C0、vha.s.Pd）");
+            HookState.note(f, "2-pos（handleFeedDataIfNeed/recordAdsNoteData/nfd.m0.g0）+ 普通广告列表过滤（nfd.m0.S/C0、ifd.s.Pd）");
         } catch (Throwable t) {
             HookKit.error(module, f.id + " install aborted", t);
             HookState.note(f, "安装异常");
@@ -77,17 +77,17 @@ final class FeedAdHooks {
 
         Method insert = HookKit.findAnchorMethod(module, f, cl,
                 AnchorKeys.FEED_AD_INSERT_GUARD, true);
-        HookKit.install(module, f, "ExploreView.g0", insert, new XposedInterface.Hooker() {
+        HookKit.install(module, f, "nfd.m0.g0", insert, new XposedInterface.Hooker() {
             @Override
             public Object intercept(XposedInterface.Chain chain) throws Throwable {
                 try {
                     Object note = chain.getArg(1);
                     if (note != null && isAd(f, note)) {
-                        HookKit.hit(module, f, "ExploreView.g0 blocked ad insert");
+                        HookKit.hit(module, f, "nfd.m0.g0 blocked ad insert");
                         return null;
                     }
                 } catch (Throwable t) {
-                    HookKit.error(module, f.id + " intercept error ExploreView.g0", t);
+                    HookKit.error(module, f.id + " intercept error nfd.m0.g0", t);
                 }
                 return chain.proceed();
             }
@@ -96,17 +96,17 @@ final class FeedAdHooks {
 
     /** 普通信息流广告：服务端下发 isAd，只能在列表层过滤。 */
     private static void installListFilter(XposedModule module, ClassLoader cl, Feature f) {
-        HookKit.install(module, f, "ExploreView.S",
+        HookKit.install(module, f, "nfd.m0.S",
                 HookKit.findAnchorMethod(module, f, cl, AnchorKeys.FEED_AD_APPEND_FILTER, true),
-                dropAdsHook(module, f, "ExploreView.S", 0));
-        HookKit.install(module, f, "ExploreView.C0",
+                dropAdsHook(module, f, "nfd.m0.S", 0));
+        HookKit.install(module, f, "nfd.m0.C0",
                 HookKit.findAnchorMethod(module, f, cl, AnchorKeys.FEED_AD_REFRESH_FILTER, true),
-                dropAdsHook(module, f, "ExploreView.C0", 0));
+                dropAdsHook(module, f, "nfd.m0.C0", 0));
         // Pd(boolean isRefresh, ArrayList pageData, 回调)：9.51.0 起列表从参数 0 移到参数 1
-        // （参数 0 变成 isRefresh 布尔），列表经回调 onSuccess 交给 ExploreView.C0。
-        HookKit.install(module, f, "vha.s.Pd",
+        // （参数 0 变成 isRefresh 布尔），列表经回调 onSuccess 交给 nfd.m0.C0。
+        HookKit.install(module, f, "ifd.s.Pd",
                 HookKit.findAnchorMethod(module, f, cl, AnchorKeys.FEED_AD_PAGER_FILTER, true),
-                dropAdsHook(module, f, "vha.s.Pd", 1));
+                dropAdsHook(module, f, "ifd.s.Pd", 1));
     }
 
     /** 在调用原方法前，把入参 List 里的广告项删掉。 */

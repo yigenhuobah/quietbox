@@ -10,7 +10,7 @@ body:
 
         1. 模块已在 LSPosed / Vector 里启用，作用域勾选了小红书；
         2. 改过开关后**已重启小红书**（多数功能重启生效）；
-        3. 已对照 README 的「兼容性」确认小红书版本在适配范围内（当前只支持 9.52.0，9.51.0 及更早不支持）。
+        3. 已对照 README 的「兼容性」确认小红书版本在适配范围内（当前只支持 9.52.1，9.52.0 及更早不支持）。
 
         没有版本信息的 issue 无法定位，下面的字段请尽量填全。
   - type: input
@@ -18,7 +18,7 @@ body:
     attributes:
       label: 模块版本
       description: 模块设置页「关于」可见版本名与 versionCode
-      placeholder: "0.9.4 (18)"
+      placeholder: "0.9.7 (21)"
     validations:
       required: true
   - type: input
@@ -26,7 +26,7 @@ body:
     attributes:
       label: 小红书版本
       description: 系统设置 → 应用信息 → 版本号（写数字 versionCode 更好）
-      placeholder: "9.52.0 (9520807)"
+      placeholder: "9.52.1 (9521801)"
     validations:
       required: true
   - type: input

@@ -34,11 +34,13 @@ import io.github.libxposed.api.XposedModule;
 /**
  * AB 测试面板的运行时。
  *
- * 读取点只有三处，覆盖小红书 9.52.0 的全部 AB 读取：
- * 1) XYExperimentImpl#f / #b —— ABTest SDK 的 getValueJustOnce / getValue
- *    （9.51.0/9.50.0 为 tq.h；方法名与签名不变）；
- * 2) XYConfigCenterImpl#l —— ConfigCenter 的字符串取值总入口
- *    （9.51.0 为 mb6.o，9.50.0 为 eb6.o；方法名与签名不变）。
+ * 读取点只有三处，覆盖小红书 9.52.1 的全部 AB 读取：
+ * 1) oq.h#e / #b —— ABTest SDK 的 getValueJustOnce / getValue
+ *    （9.52.1 为 oq.h#e/#b；9.52.0 为 XYExperimentImpl#f/#b，9.51.0/9.50.0 为 tq.h；
+ *    签名不变，仅 getValueJustOnce 的方法名 f → e）；
+ * 2) vk6.p#l —— ConfigCenter 的字符串取值总入口
+ *    （9.52.1 为 vk6.p；9.52.0 为 XYConfigCenterImpl，9.51.0 为 mb6.o，9.50.0 为 eb6.o；
+ *    方法名与签名不变）。
  *
  * 强制值来自模块 App：remote prefs 作为启动兜底，运行中每 3 秒通过
  * AbReportProvider 拉取本地副本（remote prefs 在宿主里是启动快照，不会热更新）。
@@ -76,7 +78,7 @@ public final class AbTestHooks {
         }
     }
 
-    /** XYExperimentImpl 的返回值是已经按 Type 解析好的对象；按 AbTest 声明的类型转换强制值。 */
+    /** oq.h 的返回值是已经按 Type 解析好的对象；按 AbTest 声明的类型转换强制值。 */
     private static XposedInterface.Hooker valueHook(XposedModule module, Feature f) {
         return chain -> {
             Object result = chain.proceed();
@@ -98,7 +100,7 @@ public final class AbTestHooks {
     }
 
     /**
-     * XYConfigCenterImpl#l 直接返回字符串，调用方自己用 Gson 按 TypeToken 解析。
+     * vk6.p#l 直接返回字符串，调用方自己用 Gson 按 TypeToken 解析。
      * 因此这里喂回去的也必须是 Gson 能按目标类型解析的字面量，否则解析失败
      * 会静默回落到默认值。
      */

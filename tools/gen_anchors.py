@@ -12,7 +12,7 @@
     python tools/gen_anchors.py --apk ... --dexsql /path/to/dexsql --aapt2 /path/to/aapt2
 
 输出 schema v1（与 TB 一致）：顶层
-schemaVersion/appVersion/versionCode/generatedBy/anchors/classes；
+schemaVersion/app/appVersion/versionCode/generatedBy/anchors/classes；
 每个锚点 c/m/s + feature/critical/note。s 以 "(" 开头是方法，否则是字段类型描述符。
 classes 段保持 key -> FQCN。
 
@@ -61,7 +61,7 @@ ANCHORS = {
         "note": "品牌开屏入口（Activity+int+SplashAd+Z）",
     },
     "splash_open_lazy_hf": {
-        "c": "com.xingin.advert.spi.AdsIndexSpiImp", "m": "openNeedLazyHFSplashAds", "s": "(Landroid/content/Context;Lcom/xingin/android/redutils/base/XhsActivity;Lcom/xingin/advert/intersitial/bean/SplashAd;Lio/reactivex/subjects/PublishSubject;Lcom/uber/autodispose/ScopeProvider;Lkotlin/jvm/functions/Function2;)V",
+        "c": "com.xingin.advert.spi.AdsIndexSpiImp", "m": "openNeedLazyHFSplashAds", "s": "(Landroid/content/Context;Lcom/xingin/android/redutils/base/XhsActivity;Lcom/xingin/advert/intersitial/bean/SplashAd;Lede/d;Lcom/uber/autodispose/ScopeProvider;Lkotlin/jvm/functions/Function2;)V",
         "feature": "AD-01", "critical": True,
         "note": "懒加载 HF 开屏入口",
     },
@@ -116,27 +116,27 @@ ANCHORS = {
         "note": "首页第 2 位广告比对入口",
     },
     "feed_ad_record_note": {
-        "c": "com.xingin.advert.spi.AdsHomeFeedManagerServiceImpl", "m": "recordAdsNoteData", "s": "(Lcom/xingin/advert/intersitial/bean/SplashAd;Lcom/xingin/entities/ad/AdsNoteAction;)V",
+        "c": "com.xingin.advert.spi.AdsHomeFeedManagerServiceImpl", "m": "recordAdsNoteData", "s": "(Lcom/xingin/advert/intersitial/bean/SplashAd;Lee7/r;)V",
         "feature": "AD-02", "critical": True,
         "note": "首页第 2 位广告记录入口",
     },
     "feed_ad_insert_guard": {
-        "c": "com.xingin.xhs.homepage.explorefeed.mainfeed.view.ExploreView", "m": "g0", "s": "(ILcom/xingin/entities/NoteItemBean;)V",
+        "c": "nfd.m0", "m": "g0", "s": "(ILcom/xingin/entities/NoteItemBean;)V",
         "feature": "AD-02", "critical": True,
         "note": "2-pos 广告插入守卫",
     },
     "feed_ad_append_filter": {
-        "c": "com.xingin.xhs.homepage.explorefeed.mainfeed.view.ExploreView", "m": "S", "s": "(Ljava/util/ArrayList;)V",
+        "c": "nfd.m0", "m": "S", "s": "(Ljava/util/ArrayList;)V",
         "feature": "AD-02", "critical": True,
         "note": "信息流追加列表广告过滤（AD-02）",
     },
     "feed_ad_refresh_filter": {
-        "c": "com.xingin.xhs.homepage.explorefeed.mainfeed.view.ExploreView", "m": "C0", "s": "(Ljava/util/ArrayList;I)V",
+        "c": "nfd.m0", "m": "C0", "s": "(Ljava/util/ArrayList;I)V",
         "feature": "AD-02", "critical": True,
         "note": "信息流刷新列表广告过滤（AD-02）",
     },
     "feed_ad_pager_filter": {
-        "c": "vha.s", "m": "Pd", "s": "(ZLjava/util/ArrayList;Lvha/b;)V",
+        "c": "ifd.s", "m": "Pd", "s": "(ZLjava/util/ArrayList;Lifd/b;)V",
         "feature": "AD-02", "critical": True,
         "note": "分页上游列表广告过滤（AD-02）",
     },
@@ -161,27 +161,27 @@ ANCHORS = {
         "note": "广告外跳 SPI 主挂 gotoExtApp",
     },
     "ext_app_webview_converge": {
-        "c": "com.xingin.xywebview.util.XYWebViewUtil", "m": "b", "s": "(Landroid/net/Uri;Landroid/content/Context;Lcom/xingin/entities/ad/AdRedirectInfo;ZZ)Z",
+        "c": "m8e.i0", "m": "b", "s": "(Landroid/net/Uri;Landroid/content/Context;Lcom/xingin/entities/ad/AdRedirectInfo;ZZ)Z",
         "feature": "AD-04", "critical": False,
         "note": "落地页外跳汇聚点（Path B 兜底）",
     },
     "copy_link_clipboard_write": {
-        "c": "jv8.e", "m": "b", "s": "(Landroid/content/ClipboardManager;Landroid/content/ClipData;)V",
+        "c": "q7b.e", "m": "b", "s": "(Landroid/content/ClipboardManager;Landroid/content/ClipData;)V",
         "feature": "PV-03", "critical": True,
         "note": "剪贴板写入点（setPrimaryClip 收口）",
     },
     "copy_link_funnel": {
-        "c": "com.xingin.android.redutils.q", "m": "a", "s": "(Landroid/content/Context;Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Z",
+        "c": "k92.r", "m": "a", "s": "(Landroid/content/Context;Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Z",
         "feature": "PV-03", "critical": False,
         "note": "复制链接 String 收口（兜底）",
     },
     "watermark_compose": {
-        "c": "jn6.j", "m": "a", "s": "(Landroid/graphics/Bitmap;Landroid/graphics/Bitmap;Landroid/graphics/Bitmap;Landroid/graphics/Bitmap;ZZ)Landroid/graphics/Bitmap;",
+        "c": "bm8.j", "m": "a", "s": "(Landroid/graphics/Bitmap;Landroid/graphics/Bitmap;Landroid/graphics/Bitmap;Landroid/graphics/Bitmap;ZZ)Landroid/graphics/Bitmap;",
         "feature": "EN-01", "critical": True,
         "note": "Canvas 水印合成点（禁用主/AI 水印）",
     },
     "watermark_save_entry": {
-        "c": "jn6.i", "m": "i", "s": "(Landroid/app/Activity;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZLkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;ZZZ)V",
+        "c": "bm8.i", "m": "i", "s": "(Landroid/app/Activity;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZLkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;ZZZ)V",
         "feature": "EN-01", "critical": True,
         "note": "图片保存入口（11 参 disableWaterMark）",
     },
@@ -191,22 +191,22 @@ ANCHORS = {
         "note": "MediaSaveConfig 语义 getter（可选）",
     },
     "live_photo_save_entry": {
-        "c": "zm7.j", "m": "c", "s": "(Lpr7/l;Ldg7/h;Z)V",
+        "c": "ss9.j", "m": "c", "s": "(Lny9/m;Lcl9/i;Z)V",
         "feature": "EN-03", "critical": True,
-        "note": "实况保存入口 zm7.j#c（改 feedback 字段）",
+        "note": "实况保存入口 ss9.j#c（改 feedback 字段）",
     },
     "live_photo_feedback_init": {
-        "c": "dg7.h", "m": "<init>", "s": "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZLjava/lang/String;Ljava/lang/String;Z)V",
+        "c": "cl9.i", "m": "<init>", "s": "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZLjava/lang/String;Ljava/lang/String;Z)V",
         "feature": "EN-03", "critical": False,
         "note": "实况下载参数形状（8 参 e/f/g/h）",
     },
     "live_photo_save_switch": {
-        "c": "p32.h", "m": "a", "s": "(I)Z",
+        "c": "wk2.h", "m": "a", "s": "(I)Z",
         "feature": "EN-03", "critical": True,
         "note": "实况保存链路开关 code=1（返回 false 走旧链路）",
     },
     "live_photo_legacy_download": {
-        "c": "g42.e", "m": "d", "s": "(Ljava/lang/String;Z)Lio/reactivex/Observable;",
+        "c": "ol2.e", "m": "d", "s": "(Ljava/lang/String;Z)Lio/reactivex/Observable;",
         "feature": "EN-03", "critical": False,
         "note": "旧链路视频下载（链路参考点）",
     },
@@ -241,22 +241,22 @@ ANCHORS = {
         "note": "Tab 自动播放 isAutoPlayOpenServer",
     },
     "search_ad_result_filter": {
-        "c": "pc0.c0", "m": "o", "s": "(Lcom/xingin/alioth/entities/j;Lcom/xingin/alioth/search/result/notes/repo/SearchRequestTriggerFrom;ZLnm9/g;)Ljava/util/List;",
+        "c": "jl0.f0", "m": "o", "s": "(Lcom/xingin/alioth/entities/k;Lkn0/n;ZLk3c/g;)Ljava/util/List;",
         "feature": "AD-05", "critical": True,
         "note": "搜索结果广告列表过滤（数据层）",
     },
     "note_detail_ad_image": {
-        "c": "com.xingin.matrix.notedetail.asyncwidgets.advert.AdvertV2View", "m": "a", "s": "(Lcom/xingin/advert/model/b;)V",
+        "c": "com.xingin.matrix.notedetail.asyncwidgets.advert.AdvertV2View", "m": "a", "s": "(Lz10/b;)V",
         "feature": "AD-06", "critical": True,
         "note": "详情页图片广告绑定入口",
     },
     "note_detail_ad_video": {
-        "c": "com.xingin.matrix.notedetail.asyncwidgets.advert.AdvertV2View", "m": "b", "s": "(Lf00/a0;)V",
+        "c": "com.xingin.matrix.notedetail.asyncwidgets.advert.AdvertV2View", "m": "b", "s": "(Lo50/a0;)V",
         "feature": "AD-06", "critical": True,
         "note": "详情页视频广告绑定入口",
     },
     "note_unavailable_map_invoke": {
-        "c": "yr7.o", "m": "invoke", "s": "(Ljava/lang/Object;)Ljava/lang/Object;",
+        "c": "rz9.o", "m": "invoke", "s": "(Ljava/lang/Object;)Ljava/lang/Object;",
         "feature": "EX-01", "critical": True,
         "note": "NoteDetailRepository map 阶段 lambda",
     },
@@ -266,12 +266,12 @@ ANCHORS = {
         "note": "应用内评分弹窗 onCreate（finish+抹 extra）",
     },
     "score_gp_review": {
-        "c": "com.xingin.xhs.app.ShareApplication", "m": "tryLaunchGpReview", "s": "(Landroid/xingin/com/spi/google_proxy/GpReviewScene;)V",
+        "c": "com.xingin.xhs.app.ShareApplication", "m": "tryLaunchGpReview", "s": "(La2/b;)V",
         "feature": "UI-01", "critical": True,
         "note": "Google Play 系统评分入口（void skip）",
     },
     "push_guide_dialog": {
-        "c": "com.xingin.spi.IGrowthCupidProxyImpl", "m": "pushGuideDialogDialogShow", "s": "(Landroid/content/Context;Lql/c;Ljava/lang/String;Ln1/a;)V",
+        "c": "com.xingin.spi.IGrowthCupidProxyImpl", "m": "pushGuideDialogDialogShow", "s": "(Landroid/content/Context;Lco/c;Ljava/lang/String;Lp1/a;)V",
         "feature": "UI-02", "critical": True,
         "note": "通知引导弹窗展示入口",
     },
@@ -296,17 +296,17 @@ ANCHORS = {
         "note": "满意度调研总判定（返回 false）",
     },
     "content_rating_show_video": {
-        "c": "com.xingin.growth.snackbar.ContentRatingProxyImpl", "m": "showForVideo", "s": "(Landroid/app/Activity;Landroid/xingin/com/spi/growth/IContentRatingProxy$SceneType;Ljava/lang/String;II)V",
+        "c": "com.xingin.growth.snackbar.ContentRatingProxyImpl", "m": "showForVideo", "s": "(Landroid/app/Activity;Landroid/xingin/com/spi/growth/IContentRatingProxy$b;Ljava/lang/String;II)V",
         "feature": "UI-03", "critical": False,
         "note": "视频场景满意度兜底",
     },
     "content_rating_show_image_text": {
-        "c": "com.xingin.growth.snackbar.ContentRatingProxyImpl", "m": "showForImageText", "s": "(Landroid/app/Activity;Landroid/xingin/com/spi/growth/IContentRatingProxy$SceneType;Ljava/lang/String;I)V",
+        "c": "com.xingin.growth.snackbar.ContentRatingProxyImpl", "m": "showForImageText", "s": "(Landroid/app/Activity;Landroid/xingin/com/spi/growth/IContentRatingProxy$b;Ljava/lang/String;I)V",
         "feature": "UI-03", "critical": False,
         "note": "图文场景满意度兜底",
     },
     "content_rating_show_if_needed": {
-        "c": "com.xingin.growth.snackbar.ContentRatingProxyImpl", "m": "showContentRatingSnackBarIfNeeded", "s": "(Landroid/app/Activity;Landroid/xingin/com/spi/growth/IContentRatingProxy$SceneType;II)V",
+        "c": "com.xingin.growth.snackbar.ContentRatingProxyImpl", "m": "showContentRatingSnackBarIfNeeded", "s": "(Landroid/app/Activity;Landroid/xingin/com/spi/growth/IContentRatingProxy$b;II)V",
         "feature": "UI-03", "critical": False,
         "note": "满意度公开入口兜底",
     },
@@ -326,37 +326,37 @@ ANCHORS = {
         "note": "通讯录同步生命周期注册",
     },
     "goods_comment_start_add_in": {
-        "c": "com.xingin.commercial.vision.post.spi.GoodsCommentAddInProcessor", "m": "startAddIn", "s": "(Ljava/lang/String;Lf1/b;Lf1/c;Lf1/a;Ljava/util/HashMap;)V",
+        "c": "com.xingin.commercial.vision.post.spi.GoodsCommentAddInProcessor", "m": "startAddIn", "s": "(Ljava/lang/String;Lg1/c;Lg1/d;Lg1/b;Ljava/util/HashMap;)V",
         "feature": "AD-07", "critical": True,
         "note": "评论区带货插入",
     },
     "feed_card_append_filter": {
-        "c": "com.xingin.xhs.homepage.explorefeed.mainfeed.view.ExploreView", "m": "S", "s": "(Ljava/util/ArrayList;)V",
+        "c": "nfd.m0", "m": "S", "s": "(Ljava/util/ArrayList;)V",
         "feature": "AD-08", "critical": True,
         "note": "信息流追加列表直播/带货/投票卡过滤（AD-08/09/10 共用）",
     },
     "feed_card_refresh_filter": {
-        "c": "com.xingin.xhs.homepage.explorefeed.mainfeed.view.ExploreView", "m": "C0", "s": "(Ljava/util/ArrayList;I)V",
+        "c": "nfd.m0", "m": "C0", "s": "(Ljava/util/ArrayList;I)V",
         "feature": "AD-08", "critical": True,
         "note": "信息流刷新列表直播/带货/投票卡过滤（AD-08/09/10 共用）",
     },
     "feed_card_pager_filter": {
-        "c": "vha.s", "m": "Pd", "s": "(ZLjava/util/ArrayList;Lvha/b;)V",
+        "c": "ifd.s", "m": "Pd", "s": "(ZLjava/util/ArrayList;Lifd/b;)V",
         "feature": "AD-08", "critical": True,
         "note": "分页上游直播/带货/投票卡过滤（AD-08/09/10 共用）",
     },
     "ab_get_value_once": {
-        "c": "com.xingin.abtest.impl.XYExperimentImpl", "m": "f", "s": "(Ljava/lang/String;Ljava/lang/reflect/Type;Ljava/lang/Object;)Ljava/lang/Object;",
+        "c": "oq.h", "m": "e", "s": "(Ljava/lang/String;Ljava/lang/reflect/Type;Ljava/lang/Object;)Ljava/lang/Object;",
         "feature": "EX-02", "critical": True,
         "note": "AB getValueJustOnce 读取点",
     },
     "ab_get_value": {
-        "c": "com.xingin.abtest.impl.XYExperimentImpl", "m": "b", "s": "(Ljava/lang/String;Ljava/lang/reflect/Type;Ljava/lang/Object;)Ljava/lang/Object;",
+        "c": "oq.h", "m": "b", "s": "(Ljava/lang/String;Ljava/lang/reflect/Type;Ljava/lang/Object;)Ljava/lang/Object;",
         "feature": "EX-02", "critical": True,
         "note": "AB getValue 读取点",
     },
     "config_center_get_value": {
-        "c": "com.xingin.configcenter.XYConfigCenterImpl", "m": "l", "s": "(Ljava/lang/String;)Ljava/lang/String;",
+        "c": "vk6.p", "m": "l", "s": "(Ljava/lang/String;)Ljava/lang/String;",
         "feature": "EX-02", "critical": True,
         "note": "ConfigCenter 字符串取值总入口",
     },
@@ -754,6 +754,7 @@ def main():
 
     payload = {
         "schemaVersion": SCHEMA_VERSION,
+        "app": TARGET_PACKAGE,
         "appVersion": app_version,
         "versionCode": version_code_value,
         "generatedBy": "tools/gen_anchors.py",
