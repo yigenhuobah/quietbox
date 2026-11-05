@@ -7,7 +7,7 @@
 #
 # 参数优先级：CLI > 环境变量 > 常见安装路径。
 # 环境变量：
-#   TARGET_APK / APK  目标 APK（小红书 9.52.1）
+#   TARGET_APK / APK  目标 APK（小红书 9.53.0）
 #   DEXSQL            dexsql 可执行文件
 #   AAPT2             aapt2 可执行文件（可选，仅用于显示 APK versionName）
 #
@@ -39,7 +39,7 @@ Usage:
   tools/check-mounts.sh [APK_PATH] [--apk APK] [--anchors PATH] [--dexsql PATH] [--aapt2 PATH]
 
 Arguments:
-  APK_PATH / --apk   目标 APK（小红书 9.52.1）；也可用 TARGET_APK / APK
+  APK_PATH / --apk   目标 APK（小红书 9.53.0）；也可用 TARGET_APK / APK
   --anchors PATH     anchors.json 路径（默认 app/src/main/resources/anchors.json）
   --dexsql PATH      dexsql 可执行文件；也可用 DEXSQL
   --aapt2 PATH       aapt2 可执行文件；也可用 AAPT2（可选，仅显示 versionName）
@@ -219,8 +219,8 @@ if is_executable_file "$AAPT2"; then
         | sed -n "s/.*versionName='\([^']*\)'.*/\1/p" | head -1)"
     if [ -n "$VERSION_NAME" ]; then
         echo "versionName: $VERSION_NAME"
-        [ "$VERSION_NAME" = "9.52.1" ] \
-            || echo "WARN: expected 9.52.1, got $VERSION_NAME" >&2
+        [ "$VERSION_NAME" = "9.53.0" ] \
+            || echo "WARN: expected 9.53.0, got $VERSION_NAME" >&2
     else
         echo "WARN: cannot read versionName from $TARGET_APK" >&2
     fi

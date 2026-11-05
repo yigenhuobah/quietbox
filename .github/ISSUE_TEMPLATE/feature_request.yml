@@ -29,14 +29,14 @@ body:
     id: target-version
     attributes:
       label: 小红书版本（可选）
-      placeholder: "9.52.1 (9521801)"
+      placeholder: "9.53.0 (9530807)"
     validations:
       required: false
   - type: input
     id: module-version
     attributes:
       label: 模块版本（可选）
-      placeholder: "0.9.7 (21)"
+      placeholder: "0.9.8 (22)"
     validations:
       required: false
   - type: textarea
