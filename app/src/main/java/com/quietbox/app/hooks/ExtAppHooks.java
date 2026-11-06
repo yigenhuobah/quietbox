@@ -67,15 +67,15 @@ final class ExtAppHooks {
                     AnchorKeys.EXT_APP_WEBVIEW_CONVERGE, false);
             if (b != null) {
                 if (hasAdRedirectInfoParam(b)) {
-                    HookKit.install(module, f, "m8e.i0#b", b, convergeHook(module, f));
+                    HookKit.install(module, f, "j9e.i0#b", b, convergeHook(module, f));
                 } else {
                     HookKit.warn(module, f.id
-                            + " skip: m8e.i0#b 第 3 参非 AdRedirectInfo，汇聚点不安装");
-                    HookState.note(f, "m8e.i0#b 形状不符，未安装");
+                            + " skip: j9e.i0#b 第 3 参非 AdRedirectInfo，汇聚点不安装");
+                    HookState.note(f, "j9e.i0#b 形状不符，未安装");
                 }
             }
 
-            HookState.note(f, "gotoExtApp（Path A）+ 落地页外跳汇聚点 m8e.i0#b（Path B，限广告落地页 ExternalWebViewActivityV2 非 http(s)）");
+            HookState.note(f, "gotoExtApp（Path A）+ 落地页外跳汇聚点 j9e.i0#b（Path B，限广告落地页 ExternalWebViewActivityV2 非 http(s)）");
         } catch (Throwable t) {
             HookKit.error(module, f.id + " install aborted", t);
             HookState.note(f, "安装异常");
@@ -90,11 +90,11 @@ final class ExtAppHooks {
                 if (uri instanceof Uri && ctx != null
                         && shouldBlock(ctx.getClass(),
                                 ((Uri) uri).getScheme(), chain.getArg(2))) {
-                    HookKit.hit(module, f, "m8e.i0#b blocked scheme=" + ((Uri) uri).getScheme());
+                    HookKit.hit(module, f, "j9e.i0#b blocked scheme=" + ((Uri) uri).getScheme());
                     return Boolean.FALSE;
                 }
             } catch (Throwable t) {
-                HookKit.error(module, f.id + " intercept error m8e.i0#b", t);
+                HookKit.error(module, f.id + " intercept error j9e.i0#b", t);
             }
             return chain.proceed();
         };

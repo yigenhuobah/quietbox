@@ -67,7 +67,7 @@ import io.github.libxposed.api.XposedModule;
 final class LivePhotoWatermarkHooks {
 
     /** 日志用短名：入口第 2 参 FeedbackDownloadImage（cl9.i），字段 e/h 为水印开关。 */
-    private static final String ENTRY_FEEDBACK = "cl9.i";
+    private static final String ENTRY_FEEDBACK = "kl9.i";
 
     /**
      * 实况保存链路开关 code：ss9.j#c 内 {@code const v5, 0x1} 传入 {@code wk2.h#a(I)Z}。
@@ -105,7 +105,7 @@ final class LivePhotoWatermarkHooks {
             if (m == null) {
                 return 0;
             }
-            HookKit.install(module, f, "ss9.j#c(disableWaterMark=true)", m,
+            HookKit.install(module, f, "bt9.j#c(disableWaterMark=true)", m,
                     chain -> {
                         int set = 0;
                         try {
@@ -115,14 +115,14 @@ final class LivePhotoWatermarkHooks {
                             }
                             HookKit.hit(module, f, ENTRY_FEEDBACK + ".e/h set=" + set);
                         } catch (Throwable t) {
-                            HookKit.error(module, f.id + " intercept error ss9.j#c", t);
+                            HookKit.error(module, f.id + " intercept error bt9.j#c", t);
                         }
                         // 改写的是参数对象内部字段，原参 proceed 即可。
                         return chain.proceed();
                     });
             return 1;
         } catch (Throwable t) {
-            HookKit.warn(module, f.id + " skip: anchor ss9.j#c " + t);
+            HookKit.warn(module, f.id + " skip: anchor bt9.j#c " + t);
             return 0;
         }
     }
@@ -138,23 +138,23 @@ final class LivePhotoWatermarkHooks {
             if (m == null) {
                 return 0;
             }
-            HookKit.install(module, f, "wk2.h#a(code=" + LIVE_PHOTO_SAVE_SWITCH_CODE + "→false)", m,
+            HookKit.install(module, f, "zk2.h#a(code=" + LIVE_PHOTO_SAVE_SWITCH_CODE + "→false)", m,
                     chain -> {
                         try {
                             List<Object> args = chain.getArgs();
                             if (args.size() == 1 && args.get(0) instanceof Integer
                                     && isLivePhotoSwitchCode((Integer) args.get(0))) {
-                                HookKit.hit(module, f, "wk2.h#a(" + args.get(0) + ") → false");
+                                HookKit.hit(module, f, "zk2.h#a(" + args.get(0) + ") → false");
                                 return Boolean.FALSE;
                             }
                         } catch (Throwable t) {
-                            HookKit.error(module, f.id + " intercept error wk2.h#a", t);
+                            HookKit.error(module, f.id + " intercept error zk2.h#a", t);
                         }
                         return chain.proceed();
                     });
             return 1;
         } catch (Throwable t) {
-            HookKit.warn(module, f.id + " skip: anchor wk2.h#a " + t);
+            HookKit.warn(module, f.id + " skip: anchor zk2.h#a " + t);
             return 0;
         }
     }

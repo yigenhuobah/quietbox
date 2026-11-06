@@ -38,7 +38,7 @@ final class SearchAdHooks {
             }
             Method m = HookKit.findAnchorMethod(module, f, cl,
                     AnchorKeys.SEARCH_AD_RESULT_FILTER, true);
-            HookKit.install(module, f, "jl0.f0#o", m, filterHook(module, f, ad));
+            HookKit.install(module, f, "ll0.g0#o", m, filterHook(module, f, ad));
             HookState.note(f, "搜索仓库返回列表过滤 alioth.entities.i");
         } catch (Throwable t) {
             HookKit.error(module, f.id + " install aborted", t);
@@ -68,7 +68,7 @@ final class SearchAdHooks {
                     }
                 }
             } catch (Throwable t) {
-                HookKit.error(module, f.id + " intercept error jl0.f0#o", t);
+                HookKit.error(module, f.id + " intercept error ll0.g0#o", t);
             }
             return result;
         };

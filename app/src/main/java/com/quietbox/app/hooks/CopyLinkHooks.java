@@ -80,14 +80,14 @@ final class CopyLinkHooks {
             // 回调（只打日志、不写剪贴板），在那里改 ClipData 对剪贴板零效果，已弃用。
             Method write = HookKit.findAnchorMethod(module, f, cl,
                     AnchorKeys.COPY_LINK_CLIPBOARD_WRITE, true);
-            HookKit.install(module, f, "q7b.e#b(setPrimaryClip)",
+            HookKit.install(module, f, "h8b.e#b(setPrimaryClip)",
                     write, clipDataHook(module, f, stripXsecToken));
 
             // 副挂/兜底：所有"复制链接"的 String 收口。主挂是混淆类，被 R8 重命名时靠它兜底。
             Method a = HookKit.anchorMethod(cl, AnchorKeys.COPY_LINK_FUNNEL);
-            HookKit.install(module, f, "k92/r#a", a, funnelHook(module, f, stripXsecToken));
+            HookKit.install(module, f, "m92.r#a", a, funnelHook(module, f, stripXsecToken));
 
-            HookState.note(f, "剪贴板写入点 q7b.e#b（主挂）+ 复制链接 String 收口 k92/r#a（兜底，label=" + COPY_LABEL + "）");
+            HookState.note(f, "剪贴板写入点 h8b.e#b（主挂）+ 复制链接 String 收口 m92.r#a（兜底，label=" + COPY_LABEL + "）");
         } catch (Throwable t) {
             HookKit.error(module, f.id + " install aborted", t);
             HookState.note(f, "安装异常");
@@ -109,7 +109,7 @@ final class CopyLinkHooks {
                     }
                 }
             } catch (Throwable t) {
-                HookKit.error(module, f.id + " intercept error q7b.e#b", t);
+                HookKit.error(module, f.id + " intercept error h8b.e#b", t);
             }
             return replaced == null ? chain.proceed() : chain.proceed(replaced);
         };
@@ -208,7 +208,7 @@ final class CopyLinkHooks {
                 if (args.size() >= 3) {
                     Object label = args.get(1);
                     Object text = args.get(2);
-                    seen(module, f, "k92/r.a label=" + label);
+                    seen(module, f, "m92.r.a label=" + label);
                     CharSequence csLabel = label instanceof CharSequence ? (CharSequence) label : null;
                     if (text instanceof String && isCopyLabel(csLabel)) {
                         String raw = (String) text;
@@ -216,12 +216,12 @@ final class CopyLinkHooks {
                         if (!clean.equals(raw)) {
                             replaced = args.toArray();
                             replaced[2] = clean;
-                            HookKit.hit(module, f, "k92/r.a removed=" + removedKeys(raw, stripToken));
+                            HookKit.hit(module, f, "m92.r.a removed=" + removedKeys(raw, stripToken));
                         }
                     }
                 }
             } catch (Throwable t) {
-                HookKit.error(module, f.id + " intercept error k92/r.a", t);
+                HookKit.error(module, f.id + " intercept error m92.r.a", t);
             }
             return replaced == null ? chain.proceed() : chain.proceed(replaced);
         };

@@ -60,11 +60,11 @@ final class WatermarkHooks {
             Method m = HookKit.findAnchorMethod(module, f, cl,
                     AnchorKeys.WATERMARK_COMPOSE, true);
             if (m != null) {
-                if (HookKit.install(module, f, "bm8.j#a(disableWaterMark=true)", m,
+                if (HookKit.install(module, f, "jm8.j#a(disableWaterMark=true)", m,
                         chain -> {
                             Object[] replaced = null;
                             try {
-                                HookKit.hit(module, f, "bm8.j#a");
+                                HookKit.hit(module, f, "jm8.j#a");
                                 List<Object> args = chain.getArgs();
                                 if (args.size() >= 6) {
                                     replaced = args.toArray();
@@ -74,7 +74,7 @@ final class WatermarkHooks {
                                     replaced[5] = Boolean.TRUE;
                                 }
                             } catch (Throwable t) {
-                                HookKit.error(module, f.id + " intercept error bm8.j#a", t);
+                                HookKit.error(module, f.id + " intercept error jm8.j#a", t);
                             }
                             // proceed 放在 try 外：原方法自己抛异常时不能再调一次。
                             return replaced == null ? chain.proceed() : chain.proceed(replaced);
@@ -84,7 +84,7 @@ final class WatermarkHooks {
                 }
             }
         } catch (Throwable t) {
-            HookKit.warn(module, f.id + " skip: class bm8.j " + t);
+            HookKit.warn(module, f.id + " skip: class jm8.j " + t);
         }
 
         // 2) 入口侧：bm8.i.i（9.51.0 为 ce8.i.i）的 disableWaterMark / disableAiWaterMark 置 true。
@@ -162,20 +162,20 @@ final class WatermarkHooks {
             if (m == null) {
                 return 0;
             }
-            return HookKit.install(module, f, "bm8.i#i(disableWaterMark=true)", m,
+            return HookKit.install(module, f, "jm8.i#i(disableWaterMark=true)", m,
                     chain -> {
                         Object[] replaced = null;
                         try {
-                            HookKit.hit(module, f, "bm8.i#i");
+                            HookKit.hit(module, f, "jm8.i#i");
                             List<Object> args = chain.getArgs();
                             replaced = applyWatermarkFlags(args.toArray());
                         } catch (Throwable t) {
-                            HookKit.error(module, f.id + " intercept error bm8.i#i", t);
+                            HookKit.error(module, f.id + " intercept error jm8.i#i", t);
                         }
                         return replaced == null ? chain.proceed() : chain.proceed(replaced);
                     }) ? 1 : 0;
         } catch (Throwable t) {
-            HookKit.warn(module, f.id + " skip: anchor bm8.i#i " + t);
+            HookKit.warn(module, f.id + " skip: anchor jm8.i#i " + t);
             return 0;
         }
     }

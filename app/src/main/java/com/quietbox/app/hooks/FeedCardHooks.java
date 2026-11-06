@@ -71,19 +71,19 @@ final class FeedCardHooks {
 
     private static void installOne(XposedModule module, ClassLoader cl, Feature f, String kind) {
         try {
-            HookKit.install(module, f, "nfd.m0.S",
+            HookKit.install(module, f, "hgd.m0.S",
                     HookKit.findAnchorMethod(module, f, cl,
                             AnchorKeys.FEED_CARD_APPEND_FILTER, true),
-                    dropHook(module, f, "nfd.m0.S", 0, kind));
-            HookKit.install(module, f, "nfd.m0.C0",
+                    dropHook(module, f, "hgd.m0.S", 0, kind));
+            HookKit.install(module, f, "hgd.m0.C0",
                     HookKit.findAnchorMethod(module, f, cl,
                             AnchorKeys.FEED_CARD_REFRESH_FILTER, true),
-                    dropHook(module, f, "nfd.m0.C0", 0, kind));
+                    dropHook(module, f, "hgd.m0.C0", 0, kind));
             // 9.51.0 起 Pd 的列表参数从 0 移到 1（参数 0 变成 isRefresh），见 FeedAdHooks。
-            HookKit.install(module, f, "ifd.s.Pd",
+            HookKit.install(module, f, "bgd.s.Pd",
                     HookKit.findAnchorMethod(module, f, cl,
                             AnchorKeys.FEED_CARD_PAGER_FILTER, true),
-                    dropHook(module, f, "ifd.s.Pd", 1, kind));
+                    dropHook(module, f, "bgd.s.Pd", 1, kind));
         } catch (Throwable t) {
             HookKit.error(module, f.id + " install aborted", t);
         }
