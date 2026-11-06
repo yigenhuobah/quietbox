@@ -193,7 +193,7 @@ ANCHORS = {
     "live_photo_save_entry": {
         "c": "bt9.j", "m": "b", "s": "(Lwy9/m;Lkl9/i;Z)V",
         "feature": "EN-03", "critical": True,
-        "note": "实况保存入口 ss9.j#c（改 feedback 字段）",
+        "note": "实况保存入口 bt9.j#b（改 feedback 字段）",
     },
     "live_photo_feedback_init": {
         "c": "kl9.i", "m": "<init>", "s": "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZLjava/lang/String;Ljava/lang/String;Z)V",
@@ -209,6 +209,11 @@ ANCHORS = {
         "c": "rl2.e", "m": "d", "s": "(Ljava/lang/String;Z)Lio/reactivex/Observable;",
         "feature": "EN-03", "critical": False,
         "note": "旧链路视频下载（链路参考点）",
+    },
+    "force_save_media_config": {
+        "c": "com.xingin.entities.MediaSaveConfig", "m": "b", "s": "()Z",
+        "feature": "EN-04", "critical": True,
+        "note": "旧门 disable_save 判定（false=允许保存）",
     },
     "force_save_function_enable": {
         "c": "com.xingin.entities.notedetail.FunctionSwitch", "m": "a", "s": "()Z",

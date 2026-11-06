@@ -47,16 +47,13 @@ final class ForceSaveHooks {
 
         // 门 1：MediaSaveConfig.b() -> false（主门，缺失即功能不可用）。
         try {
-            // 类锚点来自 anchors.json；b() 本身不在 check-mounts 的 64 项清单里，
-            // 仍按方法名解析（待 check-mounts 清单补项后可迁移为方法锚点）。
-            Class<?> cls = HookKit.findAnchorClass(module, f, cl,
-                    AnchorKeys.MEDIA_SAVE_CONFIG, true);
-            if (cls != null) {
-                Method m = HookKit.findMethodQuiet(module, f, cls, "b");
-                if (m != null && HookKit.install(module, f, "MediaSaveConfig#b(allow-save)", m,
-                        HookKit.constBool(module, f, "MediaSaveConfig#b", false))) {
-                    installed++;
-                }
+            // 2026-11-06 起 b() 已收编为方法锚点，check-mounts 会逐项校验；
+            // 宿主改名时走 critical skip，不再出现「门 2 成功、门 1 静默缺失」。
+            Method m = HookKit.findAnchorMethod(module, f, cl,
+                    AnchorKeys.FORCE_SAVE_MEDIA_CONFIG, true);
+            if (m != null && HookKit.install(module, f, "MediaSaveConfig#b(allow-save)", m,
+                    HookKit.constBool(module, f, "MediaSaveConfig#b", false))) {
+                installed++;
             }
         } catch (Throwable t) {
             HookKit.warn(module, f.id + " skip: MediaSaveConfig " + t);

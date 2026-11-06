@@ -107,12 +107,12 @@ public class AnchorContractTest {
         assertTrue("classes 段必须是对象", json.get("classes") instanceof Map);
     }
 
-    /** 64 是 check-mounts.sh 的挂载点清单条目数；锚点表必须全覆盖。 */
+    /** 65 是 check-mounts.sh 的挂载点清单条目数；锚点表必须全覆盖。 */
     @Test
-    public void anchorsCoverThe64ItemChecklist() throws Exception {
+    public void anchorsCoverTheChecklist() throws Exception {
         Map<String, Object> anchors = object(loadAnchors().get("anchors"));
-        assertEquals("anchors.json 必须覆盖 check-mounts.sh 的 64 项挂载点",
-                64, anchors.size());
+        assertEquals("anchors.json 必须覆盖 check-mounts.sh 的 65 项挂载点",
+                65, anchors.size());
     }
 
     @Test

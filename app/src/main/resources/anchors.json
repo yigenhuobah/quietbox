@@ -277,6 +277,14 @@
       "critical": false,
       "note": "旧链路视频下载（链路参考点）"
     },
+    "force_save_media_config": {
+      "c": "com.xingin.entities.MediaSaveConfig",
+      "m": "b",
+      "s": "()Z",
+      "feature": "EN-04",
+      "critical": true,
+      "note": "旧门 disable_save 判定（false=允许保存）"
+    },
     "force_save_function_enable": {
       "c": "com.xingin.entities.notedetail.FunctionSwitch",
       "m": "a",

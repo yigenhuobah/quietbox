@@ -28,6 +28,8 @@ import io.github.libxposed.api.XposedModule;
 final class ScreenShotHooks {
 
     private static final Set<String> BOUND = new HashSet<>();
+    /** 已提示过「检测器未定位」的观察者类，避免系统观察者刷屏。 */
+    private static final Set<String> LOCATE_WARNED = new HashSet<>();
 
     private ScreenShotHooks() {
     }
@@ -58,9 +60,12 @@ final class ScreenShotHooks {
             try {
                 Object arg = chain.getArg(2);
                 if (arg instanceof ContentObserver) {
-                    Class<?> outer = locateOuter(arg.getClass());
+                    Class<?> observerClass = arg.getClass();
+                    Class<?> outer = locateOuter(observerClass);
                     if (outer != null) {
                         bindOuter(module, f, outer);
+                    } else {
+                        noteLocateMiss(module, f, observerClass);
                     }
                 }
             } catch (Throwable t) {
@@ -68,6 +73,27 @@ final class ScreenShotHooks {
             }
             return chain.proceed();
         };
+    }
+
+    /**
+     * 观察者像检测器（嵌套类 + onChange(boolean, Uri)）但结构定位失败时，
+     * 每类只提示一次，并写入诊断备注；不改变 fail-open 行为。
+     */
+    private static void noteLocateMiss(XposedModule module, Feature f, Class<?> observerClass) {
+        if (observerClass.getEnclosingClass() == null) {
+            return;
+        }
+        if (HookKit.findMethodQuiet(observerClass, "onChange", boolean.class, Uri.class) == null) {
+            return;
+        }
+        String key = observerClass.getName();
+        synchronized (LOCATE_WARNED) {
+            if (!LOCATE_WARNED.add(key)) {
+                return;
+            }
+        }
+        HookKit.warn(module, f.id + " screenshot detector not located: " + key);
+        HookState.note(f, "检测器未定位 " + key);
     }
 
     private static Class<?> locateOuter(Class<?> observerClass) {

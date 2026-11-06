@@ -46,6 +46,7 @@ public final class AnchorKeys {
     public static final String LIVE_PHOTO_FEEDBACK_INIT = "live_photo_feedback_init";
     public static final String LIVE_PHOTO_SAVE_SWITCH = "live_photo_save_switch";
     public static final String LIVE_PHOTO_LEGACY_DOWNLOAD = "live_photo_legacy_download";
+    public static final String FORCE_SAVE_MEDIA_CONFIG = "force_save_media_config";
     public static final String FORCE_SAVE_FUNCTION_ENABLE = "force_save_function_enable";
     public static final String FORCE_SAVE_FUNCTION_TYPE = "force_save_function_type";
     public static final String AUTOPLAY_DETAIL_OPEN = "autoplay_detail_open";

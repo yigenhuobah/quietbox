@@ -1,5 +1,13 @@
 # 更新日志
 
+## Unreleased
+
+### 修复
+
+- **EN-04 旧门收编为方法锚点**：`MediaSaveConfig#b()Z` 纳入 `anchors.json` 与 `check-mounts`（65 项）；宿主改名时走 critical skip，不再出现「门 2 成功、门 1 静默缺失」。
+- **PV-01 检测器定位失败可见**：`ScreenShotHooks` 对「像检测器但结构不匹配」的观察者每类 WARN 一次并写入诊断备注，不再静默返回。
+- **hook label 更新到 9.53.0 类名**：诊断回传与日志不再显示 9.52.1 的 `nfd.m0`/`bm8.j` 等旧名。
+
 ## 0.9.8 - 2026-11-06
 
 ### 适配

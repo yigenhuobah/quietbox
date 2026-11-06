@@ -266,7 +266,7 @@ DEXSQL = os.environ["CHECK_MOUNTS_DEXSQL"]
 CACHE_DIR = Path(os.environ["CHECK_MOUNTS_CACHE"])
 
 SCHEMA_VERSION = 1
-CHECKLIST_SIZE = 64
+CHECKLIST_SIZE = 65
 TARGET_PACKAGE = "com.xingin.xhs"
 
 errors = []
@@ -467,9 +467,12 @@ for key, entry in sorted(anchors.items()):
         descriptor = "L%s;->%s:%s" % (
             entry["c"].replace(".", "/"), entry["m"], entry["s"])
     try:
-        count = query_count(
-            cache_file, "SELECT count(*) AS c FROM %s WHERE descriptor='%s'"
-                        % (table, descriptor))
+        sql = "SELECT count(*) AS c FROM %s WHERE descriptor='%s'" % (table, descriptor)
+        if is_method:
+            # methods 表包含仅被引用的方法（method_kind 为空）；只统计已定义方法，
+            # 避免「宿主只调用、未定义」被误判为锚点命中。
+            sql += " AND method_kind IS NOT NULL"
+        count = query_count(cache_file, sql)
     except RuntimeError as exc:
         fail("dexsql 查询%s %s 失败：%s"
              % ("方法" if is_method else "字段", key, exc))
